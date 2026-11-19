@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Voorraad">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230E5A6E'/%3E%3Cpath d='M27 10h10v10l7 10v22a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4V30l7-10z' fill='%23fff'/%3E%3C/svg%3E">
+<title>Drankvoorraad FLOATS &amp; ALTSTADT</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+/* Layout: één kolom (max 900px) voor gebruik op telefoon in de voorraadruimte; vaste kop met locatie + tabs, vaste voortgangsbalk onderaan tijdens het tellen. */
+:root{
+  --bg:#F4F1EC; --surface:#FFFFFF; --surface-2:#EAE5DD; --ink:#1F1A16; --muted:#675C53; --line:#DCD3C7; --control:#8A7C70;
+  --floats:#0E5A6E; --altstadt:#A8161C; --on-accent:#FFFFFF;
+  --good:#2A6540; --good-bg:#DDEEDF; --warn:#7A4A00; --warn-bg:#F8E7C4; --bad:#A1201A; --bad-bg:#F7DAD6;
+  --font-display:"Bricolage Grotesque","Inter",system-ui,sans-serif;
+  --font-text:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:8px;
+  --accent:var(--floats);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#171310; --surface:#221C18; --surface-2:#2D2520; --ink:#F3ECE3; --muted:#BBAD9F; --line:#40342C; --control:#8F8072;
+  --floats:#62B9CE; --altstadt:#EC7C74; --on-accent:#171310;
+  --good:#86C596; --good-bg:#1E3325; --warn:#E6B15C; --warn-bg:#3A2D14; --bad:#F29088; --bad-bg:#40201D;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#171310; --surface:#221C18; --surface-2:#2D2520; --ink:#F3ECE3; --muted:#BBAD9F; --line:#40342C; --control:#8F8072;
+  --floats:#62B9CE; --altstadt:#EC7C74; --on-accent:#171310;
+  --good:#86C596; --good-bg:#1E3325; --warn:#E6B15C; --warn-bg:#3A2D14; --bad:#F29088; --bad-bg:#40201D;
+  color-scheme:dark;
+}
+body[data-loc="altstadt"]{--accent:var(--altstadt)}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-text);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.wrap{max-width:900px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0;line-height:1.15}
+h2{font-size:22px} h3{font-size:16px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--muted)}
+
+/* kop */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px 8px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;min-width:0}
+.brand-mark{width:12px;height:22px;border-radius:2px 2px 5px 5px;background:var(--accent);flex:none}
+.brand-name{font-family:var(--font-display);font-weight:700;font-size:18px}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:var(--r);padding:3px;gap:3px}
+.seg button{border:0;background:transparent;padding:8px 14px;border-radius:6px;font-weight:600;font-size:13.5px;min-height:38px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.seg.soft button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs a{flex:none;padding:10px 12px;text-decoration:none;color:var(--muted);font-weight:600;font-size:14px;border-bottom:3px solid transparent}
+.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+main{padding-block:18px 120px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.rowflex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.spread{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.btn{border:1px solid var(--control);background:var(--surface);border-radius:var(--r);padding:9px 14px;font-weight:600;min-height:42px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:3px 10px;font-size:12.5px;font-weight:600;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)}
+.note{border-radius:var(--r);padding:10px 12px;font-size:14px;background:var(--surface-2)}
+.note.warn{background:var(--warn-bg);color:var(--warn)} .note.good{background:var(--good-bg);color:var(--good)} .note.bad{background:var(--bad-bg);color:var(--bad)}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label{font-size:13px;font-weight:600}
+.field small{color:var(--muted);font-size:12.5px}
+.input{border:1px solid var(--control);background:var(--surface);border-radius:var(--r);padding:9px 11px;font-size:16px;min-height:42px;width:100%}
+
+/* tellen */
+.weekbar{display:flex;align-items:center;gap:8px}
+.weekbar .wk{flex:1;min-width:0}
+.weekbar .wk b{font-family:var(--font-display);font-size:21px;display:block;line-height:1.1}
+.iconbtn{width:42px;height:42px;border-radius:var(--r);border:1px solid var(--control);background:var(--surface);font-size:18px;flex:none}
+.iconbtn:disabled{opacity:.35}
+.toolbar{display:flex;flex-direction:column;gap:10px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:13px;font-weight:500;min-height:34px;color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.cat{scroll-margin-top:130px}
+.cat-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:14px 2px 6px}
+.cat-head .cnt{font-size:12.5px;color:var(--muted)}
+.rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row-main{flex:1;min-width:0}
+.row-name{font-weight:600;overflow-wrap:anywhere}
+.row-sub{font-size:12.5px;color:var(--muted)}
+.row-note{font-size:12.5px;color:var(--muted)}
+.row-note.warn{color:var(--warn);font-weight:600}
+.row.done .row-name::after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin-left:7px;vertical-align:middle}
+.stepper{display:flex;align-items:center;gap:4px;flex:none}
+.st{width:40px;height:44px;border:1px solid var(--line);background:var(--surface-2);border-radius:6px;font-size:20px;font-weight:600;line-height:1}
+.qty{width:68px;height:44px;text-align:center;font-size:17px;font-weight:600;border:1px solid var(--control);border-radius:6px;background:var(--surface);font-variant-numeric:tabular-nums}
+.qty.invalid{border-color:var(--bad);background:var(--bad-bg)}
+.qty:disabled,.st:disabled{opacity:.55}
+.weigh{border:1px solid var(--control);background:var(--surface);color:var(--ink);border-radius:99px;padding:5px 12px;font-size:12.5px;font-weight:600;min-height:32px;margin-top:6px}
+.bottombar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.bottombar .in{display:flex;align-items:center;gap:12px}
+.prog{flex:1;min-width:0}
+.prog-top{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .2s}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+details.help summary{cursor:pointer;font-weight:600}
+details.help ol{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:65ch}
+
+/* overzicht */
+.loccards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.loccard{text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:6px}
+.loccard[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.loccard .big{font-family:var(--font-display);font-size:24px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.stat{background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.stat .v{font-family:var(--font-display);font-size:26px;font-weight:700;line-height:1.1}
+.stat .d{font-size:12.5px;color:var(--muted)}
+.weeks{display:flex;gap:5px;flex-wrap:wrap}
+.wkbox{width:38px;border-radius:6px;padding:5px 0;text-align:center;font-size:11.5px;font-weight:600;background:var(--surface-2);color:var(--muted)}
+.wkbox b{display:block;font-size:14px}
+.wkbox.done{background:var(--good-bg);color:var(--good)} .wkbox.open{background:var(--warn-bg);color:var(--warn)} .wkbox.miss{background:var(--bad-bg);color:var(--bad)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.chart svg{width:100%;height:auto;display:block}
+.chart .ax{fill:var(--muted);font-size:11px;font-family:var(--font-text)}
+.chart .lab{fill:var(--ink);font-size:11.5px;font-weight:600;font-family:var(--font-text)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .b{fill:var(--accent)} .chart .b:hover{opacity:.8}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+thead th{border-top:0;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;white-space:nowrap}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.share{display:block;height:5px;border-radius:3px;background:var(--accent);margin-top:4px;min-width:2px}
+.sig{display:flex;flex-direction:column;gap:8px}
+.sig-item{display:flex;gap:10px;align-items:flex-start}
+.sig-item .pill{flex:none;margin-top:1px}
+.empty{text-align:center;padding:34px 16px;color:var(--muted);max-width:52ch;margin:0 auto}
+.empty h3{color:var(--ink);margin-bottom:6px;font-size:18px}
+
+/* producten */
+.prow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line);width:100%;background:transparent;border-left:0;border-right:0;border-bottom:0;text-align:left}
+.prow:first-child{border-top:0}
+.prow.off{opacity:.55}
+.prow .chev{color:var(--muted);flex:none}
+
+/* modal, toast, tooltip */
+#modal{position:fixed;inset:0;z-index:40;background:rgba(15,10,8,.55);display:flex;align-items:flex-end;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+@media (min-width:640px){#modal{align-items:center}}
+.sheet:focus{outline:none}
+.sheet{background:var(--surface);border-radius:12px;width:100%;max-width:560px;max-height:100%;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:99px;font-size:13.5px;font-weight:600;max-width:calc(100% - 32px)}
+#tip{position:fixed;z-index:60;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:6px;font-size:12.5px;font-weight:500;white-space:nowrap}
+textarea.input{min-height:90px;font-size:14px;font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Drankvoorraad</span></div>
+    <div class="seg" id="locseg" role="group" aria-label="Locatie">
+      <button type="button" data-loc="floats" aria-pressed="true">FLOATS</button>
+      <button type="button" data-loc="altstadt" aria-pressed="false">ALTSTADT</button>
+    </div>
+  </div>
+  <nav class="wrap tabs" aria-label="Onderdelen">
+    <a href="#tellen">Tellen</a><a href="#overzicht">Overzicht</a><a href="#bestellen">Bestellen</a><a href="#producten">Producten</a>
+  </nav>
+</header>
+<main class="wrap" id="view">
+  <div class="empty"><h3>Voorraad laden…</h3><p>De productlijst en de tellingen van FLOATS en ALTSTADT worden opgehaald.</p></div>
+</main>
+<div id="modal" hidden></div>
+<div id="toast" hidden role="status" aria-live="polite"></div>
+<div id="tip" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="backend.js"></script>
+<script>
+(function(){
+'use strict';
+var CATS=["Tapbier","Flesbier","Alcoholvrij bier & kombucha","Fris & mixers","Water","Sappen & zuivel","Wijn wit","Wijn rosé","Wijn rood","Bubbels & dessertwijn","Gedistilleerd","Likeuren & aperitief","Koffie & thee","Siropen & bar"];
+var LOCS={floats:"FLOATS",altstadt:"ALTSTADT"};
+var VIEWS=["tellen","overzicht","bestellen","producten"];
+var COVER=1.5; // bestel-doel zonder minimum = 1,5 x gemiddeld weekverbruik
+var WEEK_MS=604800000;
+
+/* ---------- hulpfuncties ---------- */
+function $(s,r){return (r||document).querySelector(s)}
+function $all(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function ls(k,v){try{if(v===undefined)return localStorage.getItem('dv.'+k);localStorage.setItem('dv.'+k,v)}catch(e){return null}}
+function r2(n){return Math.round(n*100)/100}
+var nf=new Intl.NumberFormat('nl-NL',{maximumFractionDigits:2});
+function num(n){return n==null||isNaN(n)?'–':nf.format(r2(n))}
+function eur(n){if(n==null||isNaN(n))return '–';return new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR',minimumFractionDigits:Math.abs(n)>=1000?0:2,maximumFractionDigits:Math.abs(n)>=1000?0:2}).format(n)}
+function pct(n){return n==null||isNaN(n)?'–':new Intl.NumberFormat('nl-NL',{style:'percent',maximumFractionDigits:1}).format(n)}
+function inStr(n){return n==null?'':String(r2(n)).replace('.',',')}
+function parseNum(s){s=String(s).trim().replace(',','.');if(s==='')return null;if(!/^\d*\.?\d*$/.test(s)||s==='.')return undefined;var n=parseFloat(s);return isNaN(n)?undefined:r2(n)}
+function monUTC(d){var x=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));x.setUTCDate(x.getUTCDate()-((x.getUTCDay()+6)%7));return x}
+function weekIdOf(mon){var th=new Date(mon.getTime()+3*86400000);var y=th.getUTCFullYear();var w=Math.floor((th-Date.UTC(y,0,1))/WEEK_MS)+1;return y+'-W'+(w<10?'0':'')+w}
+function weekMon(id){var m=/^(\d{4})-W(\d{2})$/.exec(id);var y=+m[1],w=+m[2];var mon1=monUTC(new Date(Date.UTC(y,0,4)));return new Date(mon1.getTime()+(w-1)*WEEK_MS)}
+function shiftWeek(id,n){return weekIdOf(new Date(weekMon(id).getTime()+n*WEEK_MS))}
+function weeksBetween(a,b){return Math.round((weekMon(b)-weekMon(a))/WEEK_MS)}
+function weekNo(id){return +id.slice(6)}
+var dfm=new Intl.DateTimeFormat('nl-NL',{day:'numeric',month:'short',timeZone:'UTC'});
+function weekRange(id){var m=weekMon(id);return dfm.format(m)+' – '+dfm.format(new Date(m.getTime()+6*86400000))}
+function dateShort(iso){if(!iso)return '';try{return new Intl.DateTimeFormat('nl-NL',{weekday:'short',day:'numeric',month:'short'}).format(new Date(iso))}catch(e){return ''}}
+function todayWeek(){var n=new Date();return weekIdOf(monUTC(new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()))))}
+function catIdx(c){var i=CATS.indexOf(c);return i<0?999:i}
+function slug(s){return String(s).normalize('NFKD').replace(/[^\x00-\x7F]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}
+
+/* ---------- toestand ---------- */
+var hashView=(location.hash||'').slice(1);
+var S={
+  loc:LOCS[ls('loc')]?ls('loc'):'floats',
+  view:VIEWS.indexOf(hashView)>=0?hashView:null,
+  week:todayWeek(), mode:'tel', filter:'all', q:'', pq:'',
+  catalog:{floats:null,altstadt:null}, counts:{}, got:{floats:false,altstadt:false,counts:false},
+  overlay:{}, canWrite:true, isOwner:false, uid:null, names:{},
+  db:null, user:null, dl:null, failed:null, slow:false, saveState:'', showAllUse:false, sig:''
+};
+var NOW_WEEK=S.week;
+
+/* ---------- gegevens lezen ---------- */
+function itemsOf(loc){var c=S.catalog[loc];return (c&&c.items)||{}}
+function prodList(loc,all){
+  var it=itemsOf(loc),out=[];
+  Object.keys(it).forEach(function(id){var p=it[id];if(!p||typeof p!=='object')return;if(!all&&p.active===false)return;out.push({id:id,p:p})});
+  out.sort(function(a,b){return catIdx(a.p.cat)-catIdx(b.p.cat)||String(a.p.cat).localeCompare(String(b.p.cat))||(a.p.ord||0)-(b.p.ord||0)||String(a.p.name).localeCompare(String(b.p.name))});
+  return out;
+}
+function cid(loc,week){return loc+'_'+week}
+function cnt(loc,week){
+  var id=cid(loc,week),b=S.counts[id],o=S.overlay[id];
+  if(!b&&!o)return null;
+  var c=Object.assign({loc:loc,week:week,status:'open'},b||{});
+  c.qty=Object.assign({},b&&b.qty,o&&o.qty); c.inn=Object.assign({},b&&b.inn,o&&o.inn);
+  return c;
+}
+function doneCounts(loc){
+  return Object.keys(S.counts).map(function(k){return S.counts[k]}).filter(function(c){return c&&c.loc===loc&&c.status==='done'&&c.week})
+    .sort(function(a,b){return a.week<b.week?-1:a.week>b.week?1:0});
+}
+function prevDone(loc,week){var d=doneCounts(loc),p=null;for(var i=0;i<d.length;i++){if(d[i].week<week)p=d[i];else break}return p}
+function priceOf(loc,c,id){if(c&&c.prices&&typeof c.prices[id]==='number')return c.prices[id];var p=itemsOf(loc)[id];return p&&typeof p.price==='number'?p.price:null}
+function n0(v){return typeof v==='number'?v:0}
+/* per product: begin + geleverd - eind = verbruik */
+function analyse(loc,c,prev){
+  var it=itemsOf(loc),ids={},rows=[],gap=prev?Math.max(1,weeksBetween(prev.week,c.week)):null;
+  Object.keys(it).forEach(function(id){if(it[id]&&it[id].active!==false)ids[id]=1});
+  [c.qty,c.inn,prev&&prev.qty].forEach(function(m){if(m)Object.keys(m).forEach(function(id){if(n0(m[id])>0&&it[id])ids[id]=1})});
+  Object.keys(ids).forEach(function(id){
+    var p=it[id],end=c.qty?c.qty[id]:null;if(typeof end!=='number')end=null;
+    var inn=n0(c.inn&&c.inn[id]),begin=prev?n0(prev.qty&&prev.qty[id]):null,price=priceOf(loc,c,id);
+    var usage=(prev&&end!=null)?r2(begin+inn-end):null;
+    rows.push({id:id,p:p,begin:begin,inn:inn,end:end,usage:usage,price:price,
+      value:end!=null&&price!=null?end*price:0,usageValue:usage!=null&&price!=null?usage*price:0,neg:usage!=null&&usage<-0.05});
+  });
+  rows.sort(function(a,b){return catIdx(a.p.cat)-catIdx(b.p.cat)||(a.p.ord||0)-(b.p.ord||0)});
+  var tv=0,tu=0;rows.forEach(function(r){tv+=r.value;tu+=r.usageValue});
+  return {rows:rows,value:tv,usageValue:prev?tu:null,gap:gap};
+}
+/* gemiddeld weekverbruik per product over de laatste (max 4) perioden */
+function avgUsage(loc){
+  var d=doneCounts(loc),sum={},weeks=0,from=Math.max(1,d.length-4);
+  for(var i=from;i<d.length;i++){var a=analyse(loc,d[i],d[i-1]);weeks+=a.gap;a.rows.forEach(function(r){if(r.usage!=null)sum[r.id]=(sum[r.id]||0)+r.usage})}
+  var out={};if(weeks>0)Object.keys(sum).forEach(function(id){out[id]=Math.max(0,sum[id]/weeks)});
+  return {avg:out,weeks:weeks};
+}
+function nameOf(uid){
+  if(!uid)return '';
+  if(S.names[uid]!==undefined)return S.names[uid];
+  S.names[uid]='';
+  if(S.user&&S.user.profiles){S.user.profiles([uid]).then(function(ps){var n=ps&&ps[uid]&&ps[uid].name;if(n){S.names[uid]=n;render(true)}})}
+  return '';
+}
+
+/* ---------- schrijven: één schrijfactie tegelijk per document ---------- */
+var Q={};
+function mergePatch(t,s){Object.keys(s).forEach(function(k){var v=s[k];if(v&&typeof v==='object'&&!Array.isArray(v)){t[k]=Object.assign(t[k]||{},v)}else t[k]=v});return t}
+function setSave(st){S.saveState=st;var el=$('#savestate');if(el){el.textContent=st==='saving'?'Opslaan…':st==='error'?'Niet opgeslagen':st==='saved'?'Opgeslagen':'';el.className=st==='error'?'pill bad':'muted'}}
+function queue(docId,patch,now){
+  var q=Q[docId]||(Q[docId]={patch:null,timer:null,busy:false,waiters:[]});
+  q.patch=mergePatch(q.patch||{},patch);setSave('saving');
+  clearTimeout(q.timer);
+  return new Promise(function(res,rej){q.waiters.push({res:res,rej:rej});if(now)flush(docId);else q.timer=setTimeout(function(){flush(docId)},600)});
+}
+function ensureDoc(docId){
+  if(S.counts[docId])return Promise.resolve();
+  var ref=S.db.doc('counts/'+docId),parts=docId.split('_');
+  return ref.get().then(function(s){if(s.exists)return;return ref.set({loc:parts[0],week:parts[1],status:'open',startedAt:new Date().toISOString(),qty:{},inn:{}})});
+}
+function flush(docId,retry){
+  var q=Q[docId];if(!q||q.busy||!q.patch)return;
+  var patch=q.patch,waiters=q.waiters;q.patch=null;q.waiters=[];q.busy=true;clearTimeout(q.timer);
+  patch.updatedAt=new Date().toISOString();
+  if(S.uid){patch.editors=patch.editors||{};patch.editors[S.uid]=true}
+  ensureDoc(docId).then(function(){return S.db.doc('counts/'+docId).update(patch)}).then(function(){
+    var o=S.overlay[docId];
+    if(o)['qty','inn'].forEach(function(k){if(patch[k]&&o[k])Object.keys(patch[k]).forEach(function(id){if(o[k][id]===patch[k][id])delete o[k][id]})});
+    q.busy=false;waiters.forEach(function(w){w.res()});
+    if(q.patch)flush(docId);else if(!anyPending())setSave('saved');
+  }).catch(function(e){
+    q.busy=false;q.patch=mergePatch(patch,q.patch||{});q.waiters=waiters.concat(q.waiters);
+    if(!retry&&(!e||e.code==='unavailable'||!e.code)){setTimeout(function(){flush(docId,true)},1200+Math.random()*800);return}
+    var w=q.waiters;q.waiters=[];w.forEach(function(x){x.rej(e)});
+    setSave('error');
+    if(e&&e.code==='invalid_argument'){S.canWrite=false;toast('Opslaan is niet toegestaan. Meld dit bij de eigenaar.');render()}
+    else toast(e&&e.code==='quota_exceeded'?'Opslag is vol. Meld dit bij de eigenaar.':'Opslaan lukt nu niet. Controleer je verbinding; je invoer blijft staan en wordt opnieuw geprobeerd.');
+  });
+}
+function anyPending(){return Object.keys(Q).some(function(k){return Q[k].busy||Q[k].patch})}
+function setVal(kind,pid,val){
+  var id=cid(S.loc,S.week),o=S.overlay[id]||(S.overlay[id]={qty:{},inn:{}});
+  o[kind][pid]=val;var p={};p[kind]={};p[kind][pid]=val;
+  queue(id,p).catch(function(){});
+}
+var catChain={};
+function saveProduct(loc,pid,p){
+  var ref=S.db.doc('catalog/'+loc),exists=!!(S.catalog[loc]&&S.catalog[loc]._exists);
+  var items={};items[pid]=p;
+  catChain[loc]=(catChain[loc]||Promise.resolve()).catch(function(){}).then(function(){
+    return exists?ref.update({items:items}):ref.set({loc:loc,label:LOCS[loc],items:items});
+  });
+  return catChain[loc];
+}
+
+/* ---------- algemene UI ---------- */
+var toastT;
+function toast(msg){var t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},4200)}
+function openModal(html){var m=$('#modal');m.innerHTML='<div class="sheet" role="dialog" aria-modal="true" tabindex="-1">'+html+'</div>';m.hidden=false;var f=$('.sheet',m);if(f)f.focus()}
+function closeModal(){var m=$('#modal');m.hidden=true;m.innerHTML=''}
+function setChrome(){
+  document.body.setAttribute('data-loc',S.loc);
+  $all('#locseg button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.loc===S.loc?'true':'false')});
+  $all('.tabs a').forEach(function(a){if(a.getAttribute('href')==='#'+S.view)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+}
+function ready(){return S.got.floats&&S.got.altstadt&&S.got.counts}
+function render(soft){
+  setChrome();
+  var v=$('#view');
+  if(S.failed){v.innerHTML='<div class="empty"><h3>'+esc(S.failed.t)+'</h3><p>'+esc(S.failed.m)+'</p></div>';return}
+  if(!ready()){v.innerHTML='<div class="empty"><h3>Voorraad laden…</h3><p>'+(S.slow?'De gegevens zijn nog niet bereikbaar. Controleer je internetverbinding; zodra er verbinding is verschijnt de voorraad vanzelf.':'De productlijst en de tellingen van FLOATS en ALTSTADT worden opgehaald.')+'</p></div>';return}
+  if(S.view==='tellen'){
+    var c=cnt(S.loc,S.week),sig=[S.loc,S.week,S.mode,!!(c&&c.status==='done'),S.canWrite,catSig(S.loc),S.filter].join('|');
+    if(soft&&sig===S.sig&&$('#list')){patchTellen();return}
+    S.sig=sig;renderTellen();return;
+  }
+  S.sig='';
+  if(soft&&v.contains(document.activeElement)&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)&&S.view==='producten'){renderProdList();return}
+  if(S.view==='overzicht')renderOverzicht();else if(S.view==='bestellen')renderBestellen();else renderProducten();
+}
+function catSig(loc){var it=itemsOf(loc);return Object.keys(it).map(function(k){var p=it[k];return k+(p.active===false?'0':'1')+p.name+p.unit+p.cat+p.pack}).join(',').length+':'+Object.keys(it).length+':'+JSON.stringify(it).length}
+
+/* ---------- TELLEN ---------- */
+function statusPill(c){
+  if(!c||(!S.counts[cid(c.loc,c.week)]&&c.status!=='done'&&!Object.keys(c.qty).length&&!Object.keys(c.inn).length))return '<span class="pill">Nog niet gestart</span>';
+  if(c.status==='done'){var n=nameOf(c.closedBy);return '<span class="pill good">✓ Afgerond'+(c.closedAt?' · '+esc(dateShort(c.closedAt)):'')+(n?' · '+esc(n):'')+'</span>'}
+  return '<span class="pill warn">Bezig</span>';
+}
+function tellenRows(){
+  var c=cnt(S.loc,S.week)||{qty:{},inn:{}},list=prodList(S.loc),q=S.q.trim().toLowerCase();
+  return list.filter(function(x){
+    if(q&&(x.p.name+' '+x.p.cat+' '+(x.p.sup||'')).toLowerCase().indexOf(q)<0)return false;
+    if(S.filter==='todo'&&S.mode==='tel'&&typeof c.qty[x.id]==='number')return false;
+    return true;
+  });
+}
+function rowInfo(x,c,prev){
+  var p=x.p,qty=c&&typeof c.qty[x.id]==='number'?c.qty[x.id]:null,inn=c&&typeof c.inn[x.id]==='number'?c.inn[x.id]:null,pack=p.pack>1?p.pack:1;
+  var o={val:null,sub:'',note:'',warn:false,done:false};
+  if(S.mode==='tel'){
+    o.val=qty;o.done=qty!=null;
+    o.sub=esc(p.unit)+(prev?' · vorige telling '+num(n0(prev.qty&&prev.qty[x.id])):'')+(inn?' · geleverd '+num(inn):'');
+    if(prev&&qty!=null){var u=r2(n0(prev.qty&&prev.qty[x.id])+n0(inn)-qty);
+      if(u<-0.05){o.warn=true;o.note='⚠ '+num(-u)+' meer dan vorige telling + leveringen. Levering nog invoeren?'}
+      else o.note='Verbruik '+num(u)}
+  }else{
+    o.val=inn==null?null:r2(inn/pack);o.done=inn!=null&&inn>0;
+    o.sub=pack>1?'per '+esc(p.packName||'verpakking')+' van '+pack+' × '+esc(p.unit):'per '+esc(p.unit);
+    if(inn&&pack>1)o.note='= '+num(inn)+' × '+p.unit+' geleverd';
+  }
+  return o;
+}
+function renderTellen(){
+  var loc=S.loc,c=cnt(loc,S.week),prev=prevDone(loc,S.week),done=c&&c.status==='done',ro=!S.canWrite||done;
+  var list=prodList(loc),rows=tellenRows(),h='';
+  h+='<section class="stack"><div class="weekbar"><button class="iconbtn" id="wkprev" aria-label="Vorige week">‹</button>'
+    +'<div class="wk"><b>Week '+weekNo(S.week)+' · '+esc(LOCS[loc])+'</b><span class="muted">'+esc(weekRange(S.week))+(S.week===NOW_WEEK?' · deze week':'')+'</span></div>'
+    +'<button class="iconbtn" id="wknext" aria-label="Volgende week"'+(S.week>=NOW_WEEK?' disabled':'')+'>›</button></div>'
+    +'<div class="rowflex"><span id="stpill">'+statusPill(c)+'</span><span class="muted" style="font-size:13px">'+(prev?'Verbruik wordt berekend t.o.v. week '+weekNo(prev.week)+'.':'Eerste telling: dit wordt de beginvoorraad.')+'</span></div>';
+  if(!S.canWrite)h+='<div class="note warn">Je kunt nu alleen meekijken: opslaan is op dit moment niet toegestaan. Meld dit bij de eigenaar.</div>';
+  if(done)h+='<div class="note good spread"><span>Deze telling is afgerond en telt mee in het overzicht.</span>'+(S.canWrite?'<button class="btn" id="reopen">Heropenen om te corrigeren</button>':'')+'</div>';
+  if(!list.length)h+='<div class="empty"><h3>Nog geen producten voor '+esc(LOCS[loc])+'</h3><p>Voeg producten toe op het tabblad Producten. Daarna kun je hier tellen.</p></div>';
+  h+='</section>';
+  if(list.length){
+    h+='<details class="help card"'+(ls('help')==='0'?'':' open')+'><summary>Zo werkt de wekelijkse telling</summary><ol>'
+      +'<li><b>Leveringen invoeren.</b> Vul in wat er sinds de vorige telling is binnengekomen (pakbon of factuur), per krat, doos of fust.</li>'
+      +'<li><b>Voorraad tellen.</b> Tel per product wat er staat, in losse flessen. Een aangebroken fles of fust schat je in tienden: 2,4 is twee volle en één van 40%. Een aangebroken fust kun je ook wegen: tik bij het fust op Wegen.</li>'
+      +'<li><b>Afronden.</b> Druk op Afronden als alles geteld is. Pas dan telt de week mee in het overzicht en de bestellijst.</li>'
+      +'</ol></details>';
+    h+='<section class="toolbar"><div class="seg soft" id="modeseg" role="group" aria-label="Wat wil je invullen"><button type="button" data-mode="tel" aria-pressed="'+(S.mode==='tel')+'">Voorraad tellen</button><button type="button" data-mode="lev" aria-pressed="'+(S.mode==='lev')+'">Leveringen invoeren</button></div>'
+      +'<input class="input" id="q" type="search" placeholder="Zoek product, bv. cola of gin" value="'+esc(S.q)+'" aria-label="Zoek product">'
+      +'<div class="chips" id="chips">'+(S.mode==='tel'?'<button class="chip" data-filter="all" aria-pressed="'+(S.filter==='all')+'">Alles</button><button class="chip" data-filter="todo" aria-pressed="'+(S.filter==='todo')+'">Nog te tellen</button>':'')
+      +catsOf(list).map(function(cn,i){return '<button class="chip" data-jump="'+i+'">'+esc(cn)+'</button>'}).join('')+'</div></section>';
+    h+='<div id="list">'+listHtml(rows,c,prev,ro,list)+'</div>';
+    h+='<div class="bottombar"><div class="wrap in"><div class="prog"><div class="prog-top"><span id="progtxt"></span><span id="savestate" class="muted"></span></div><div class="bar"><i id="progbar" style="width:0%"></i></div></div>'
+      +(S.canWrite&&!done?'<button class="btn primary" id="finish">Afronden</button>':'')+'</div></div>';
+  }
+  $('#view').innerHTML=h;setSave(S.saveState);updProgress();
+}
+function catsOf(list){var s=[];list.forEach(function(x){if(s.indexOf(x.p.cat)<0)s.push(x.p.cat)});return s}
+function listHtml(rows,c,prev,ro,full){
+  if(!rows.length)return '<div class="empty"><h3>'+(S.filter==='todo'&&!S.q?'Alles is geteld':'Geen producten gevonden')+'</h3><p>'+(S.filter==='todo'&&!S.q?'Controleer zo nodig de lijst via Alles en druk daarna op Afronden.':'Pas je zoekterm aan, of voeg het product toe op het tabblad Producten.')+'</p></div>';
+  var allCats=catsOf(full),h='',cur=null;
+  rows.forEach(function(x){
+    if(x.p.cat!==cur){if(cur!==null)h+='</ul></section>';cur=x.p.cat;
+      h+='<section class="cat" id="cat-'+allCats.indexOf(cur)+'"><div class="cat-head"><h3>'+esc(cur)+'</h3><span class="cnt num" data-catcnt="'+esc(cur)+'"></span></div><ul class="rows">'}
+    var o=rowInfo(x,c,prev);
+    h+='<li class="row'+(o.done?' done':'')+'" data-pid="'+esc(x.id)+'"><div class="row-main"><div class="row-name">'+esc(x.p.name)+'</div><div class="row-sub">'+o.sub+'</div><div class="row-note'+(o.warn?' warn':'')+'">'+esc(o.note)+'</div>'+(S.mode==='tel'&&!ro&&weighable(x.p)?'<button type="button" class="weigh" data-weigh>Wegen</button>':'')+'</div>'
+      +'<div class="stepper"><button type="button" class="st" data-step="-1" aria-label="Eén minder"'+(ro?' disabled':'')+'>−</button>'
+      +'<input class="qty" id="q-'+esc(x.id)+'" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" value="'+inStr(o.val)+'" aria-label="'+(S.mode==='tel'?'Aantal ':'Geleverd ')+esc(x.p.name)+'"'+(ro?' disabled':'')+'>'
+      +'<button type="button" class="st" data-step="1" aria-label="Eén meer"'+(ro?' disabled':'')+'>+</button></div></li>';
+  });
+  return h+'</ul></section>';
+}
+function patchRow(li,c,prev,skipInput){
+  var id=li.dataset.pid,p=itemsOf(S.loc)[id];if(!p)return;
+  var o=rowInfo({id:id,p:p},c,prev),inp=$('.qty',li);
+  li.classList.toggle('done',o.done);
+  $('.row-sub',li).innerHTML=o.sub;
+  var n=$('.row-note',li);n.textContent=o.note;n.classList.toggle('warn',o.warn);
+  if(!skipInput&&document.activeElement!==inp&&!inp.classList.contains('invalid')){var v=inStr(o.val);if(inp.value!==v)inp.value=v}
+}
+function patchTellen(){
+  var c=cnt(S.loc,S.week),prev=prevDone(S.loc,S.week);
+  $all('#list .row').forEach(function(li){patchRow(li,c,prev)});updProgress();var sp=$('#stpill');if(sp)sp.innerHTML=statusPill(c);
+}
+function updProgress(){
+  var c=cnt(S.loc,S.week)||{qty:{},inn:{}},list=prodList(S.loc),n=0,per={},tot={};
+  list.forEach(function(x){tot[x.p.cat]=(tot[x.p.cat]||0)+1;if(typeof c.qty[x.id]==='number'){n++;per[x.p.cat]=(per[x.p.cat]||0)+1}});
+  var t=$('#progtxt'),b=$('#progbar');
+  if(t)t.innerHTML='<b class="num">'+n+'</b> van '+list.length+' geteld';
+  if(b)b.style.width=(list.length?Math.round(n/list.length*100):0)+'%';
+  $all('[data-catcnt]').forEach(function(el){var k=el.getAttribute('data-catcnt');el.textContent=S.mode==='tel'?(per[k]||0)+' / '+(tot[k]||0):''});
+  var todo=$('[data-filter="todo"]');if(todo)todo.textContent='Nog te tellen ('+(list.length-n)+')';
+}
+function onQtyInput(inp){
+  var li=inp.closest('.row'),pid=li.dataset.pid,v=parseNum(inp.value);
+  if(v===undefined){inp.classList.add('invalid');return}
+  inp.classList.remove('invalid');
+  var p=itemsOf(S.loc)[pid],pack=p&&p.pack>1?p.pack:1;
+  if(S.mode==='tel')setVal('qty',pid,v);else setVal('inn',pid,v==null?null:r2(v*pack));
+  patchRow(li,cnt(S.loc,S.week),prevDone(S.loc,S.week),true);updProgress();
+}
+/* ---------- wegen van een aangebroken fust ---------- */
+function volOf(p){
+  if(typeof p.vol==='number'&&p.vol>0)return p.vol;
+  var m=/(\d+(?:[.,]\d+)?)\s*(l|cl|ml)\b/i.exec(p.unit||'');if(!m)return null;
+  var n=parseFloat(m[1].replace(',','.')),u=m[2].toLowerCase();return u==='l'?n:u==='cl'?n/100:n/1000;
+}
+function weighable(p){return p.cat==='Tapbier'||typeof p.tare==='number'}
+function unitWord(p){return String(p.unit||'stuk').split(' ')[0]||'stuk'}
+function openWeigh(pid){
+  var p=itemsOf(S.loc)[pid];if(!p)return;
+  var c=cnt(S.loc,S.week)||{qty:{}},q=typeof c.qty[pid]==='number'?c.qty[pid]:null,b=S.counts[cid(S.loc,S.week)],w=b&&b.wt&&b.wt[pid],vol=volOf(p),word=esc(unitWord(p));
+  function f(id,label,val,small){return '<div class="field"><label for="'+id+'">'+label+'</label><input class="input" id="'+id+'" inputmode="decimal" autocomplete="off" value="'+esc(val==null?'':val)+'">'+(small?'<small>'+small+'</small>':'')+'</div>'}
+  openModal('<h2>'+esc(p.name)+' wegen</h2><p class="muted" style="margin:0">'+esc(p.unit)+' · weeg alleen wat is aangebroken.</p>'
+    +'<div id="weighform" class="stack" data-pid="'+esc(pid)+'"><div class="grid2">'
+    +f('w-n','Aantal vol',w&&typeof w.n==='number'?inStr(w.n):(q!=null?inStr(Math.floor(q)):''),'Nog dicht of niet aangesloten.')
+    +f('w-kg','Gewicht aangebroken '+word+', in kg',w&&typeof w.kg==='number'?inStr(w.kg):'','Niets aangebroken? Laat leeg.')+'</div><div class="grid2">'
+    +f('w-tare','Leeggewicht, in kg',typeof p.tare==='number'?inStr(p.tare):'','Weeg één keer een leeg exemplaar. Dit wordt onthouden.')
+    +f('w-vol','Inhoud als vol, in liter',vol!=null?inStr(vol):'','Bier weegt ongeveer 1 kg per liter.')+'</div>'
+    +'<div class="note" id="w-out"></div></div>'
+    +'<div class="spread"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="w-ok">Overnemen in telling</button></div>');
+  updWeigh();
+}
+function updWeigh(){
+  var out=$('#w-out');if(!out)return null;
+  var n=parseNum($('#w-n').value),kg=parseNum($('#w-kg').value),tare=parseNum($('#w-tare').value),vol=parseNum($('#w-vol').value);
+  function say(cls,t){out.className='note'+(cls?' '+cls:'');out.textContent=t;return null}
+  if(n===undefined||kg===undefined||tare===undefined||vol===undefined)return say('bad','Vul alleen getallen in, bv. 17,5.');
+  if(n==null)n=0;
+  if(kg==null){say('','Niets aangebroken: de telling wordt '+num(n)+'.');return {total:r2(n),n:n,kg:null,tare:tare,vol:vol}}
+  if(tare==null)return say('warn','Vul het leeggewicht in om te kunnen rekenen.');
+  if(!(vol>0))return say('warn','Vul in hoeveel liter erin gaat als hij vol is.');
+  var net=kg-tare,frac=net/vol;
+  if(net<-0.05)return say('bad','Het gewicht is lager dan het leeggewicht. Controleer beide getallen.');
+  if(frac>1.08)return say('bad','Dit is zwaarder dan een vol exemplaar (ongeveer '+num(tare+vol)+' kg). Controleer het gewicht en het leeggewicht.');
+  frac=Math.max(0,Math.min(1,frac));
+  var total=r2(n+frac);
+  say('good','('+num(kg)+' − '+num(tare)+') ÷ '+num(vol)+' = '+num(frac)+' aangebroken. Met '+num(n)+' vol wordt de telling '+num(total)+'.');
+  return {total:total,n:n,kg:kg,tare:tare,vol:vol};
+}
+function doWeigh(){
+  var r=updWeigh();if(!r)return;
+  var pid=$('#weighform').dataset.pid,p=itemsOf(S.loc)[pid],id=cid(S.loc,S.week),patch={wt:{}},upd={};
+  if(r.tare!=null&&r.tare!==p.tare)upd.tare=r.tare;
+  if(r.vol>0&&r.vol!==volOf(p))upd.vol=r.vol;
+  if(Object.keys(upd).length)saveProduct(S.loc,pid,upd).catch(function(){toast('Het leeggewicht kon niet worden onthouden.')});
+  setVal('qty',pid,r.total);
+  patch.wt[pid]={n:r.n,kg:r.kg};queue(id,patch).catch(function(){});
+  closeModal();
+  $all('#list .row').forEach(function(li){if(li.dataset.pid===pid)$('.qty',li).classList.remove('invalid')});
+  patchTellen();toast(p.name+': telling '+num(r.total)+'.');
+}
+function openFinish(){
+  var loc=S.loc,c=cnt(loc,S.week)||{qty:{},inn:{}},prev=prevDone(loc,S.week),list=prodList(loc);
+  var miss=list.filter(function(x){return typeof c.qty[x.id]!=='number'}),neg=[];
+  if(prev)list.forEach(function(x){var q=c.qty[x.id];if(typeof q==='number'){var u=n0(prev.qty&&prev.qty[x.id])+n0(c.inn[x.id])-q;if(u<-0.05)neg.push(x.p.name+' ('+num(-u)+' te veel)')}});
+  var anyIn=Object.keys(c.inn).some(function(k){return n0(c.inn[k])>0});
+  var h='<h2>Week '+weekNo(S.week)+' afronden</h2><p class="muted" style="margin:0">'+esc(LOCS[loc])+' · '+(list.length-miss.length)+' van '+list.length+' producten geteld.</p>';
+  if(miss.length)h+='<div class="note warn"><b>'+miss.length+' niet geteld.</b> Die worden als 0 opgeslagen: '+esc(miss.slice(0,6).map(function(x){return x.p.name}).join(', '))+(miss.length>6?' en '+(miss.length-6)+' andere':'')+'.</div>';
+  if(neg.length)h+='<div class="note warn"><b>Meer geteld dan er kan zijn bij '+neg.length+' product'+(neg.length>1?'en':'')+'.</b> Meestal een levering die nog niet is ingevoerd: '+esc(neg.slice(0,5).join(', '))+(neg.length>5?' …':'')+'.</div>';
+  if(prev&&!anyIn)h+='<div class="note warn">Er zijn deze week geen leveringen ingevoerd. Klopt dat? Zonder leveringen valt het verbruik te laag uit.</div>';
+  h+='<div class="field"><label for="f-naam">Je naam</label><input class="input" id="f-naam" autocomplete="name" value="'+esc(ls('naam')||'')+'"><small>Zo is te zien wie de telling heeft afgerond. Wordt op dit apparaat onthouden.</small></div>';
+  h+='<div class="field"><label for="f-omzet">Drankomzet deze week, excl. btw (optioneel)</label><input class="input" id="f-omzet" inputmode="decimal" placeholder="bv. 8450" value="'+(typeof c.omzet==='number'?inStr(c.omzet):'')+'"><small>Uit de kassa (Lightspeed / WaiterPro). Daarmee rekent het overzicht het drankkostenpercentage uit.</small></div>'
+    +'<div class="field"><label for="f-note">Opmerking (optioneel)</label><input class="input" id="f-note" placeholder="bv. feest zaterdag, breuk 2 flessen cava" value="'+esc(c.note||'')+'"></div>'
+    +'<div class="note bad" id="f-err" hidden></div>'
+    +'<div class="spread"><button class="btn ghost" data-close>Terug naar tellen</button><button class="btn primary" id="f-ok">Telling afronden</button></div>';
+  openModal(h);
+}
+function doFinish(){
+  var loc=S.loc,id=cid(loc,S.week),c=cnt(loc,S.week)||{qty:{},inn:{}},err=$('#f-err');
+  var nm=$('#f-naam').value.trim().slice(0,40);
+  if(!nm){err.textContent='Vul je naam in.';err.hidden=false;return}
+  ls('naam',nm);S.uid='naam:'+nm.replace(/[.\/]/g,' ');S.names[S.uid]=nm;
+  var om=parseNum($('#f-omzet').value.replace(/[€\s]/g,'').replace(/\.(?=\d{3}(\D|$))/g,''));
+  if(om===undefined){err.textContent='De drankomzet is geen geldig bedrag. Vul alleen cijfers in, bv. 8450 of 8450,50.';err.hidden=false;return}
+  var patch={status:'done',closedAt:new Date().toISOString(),closedBy:S.uid||null,omzet:om,note:$('#f-note').value.trim().slice(0,300),qty:{},prices:{}};
+  prodList(loc).forEach(function(x){if(typeof c.qty[x.id]!=='number')patch.qty[x.id]=0;if(typeof x.p.price==='number')patch.prices[x.id]=x.p.price});
+  var btn=$('#f-ok');btn.disabled=true;btn.textContent='Opslaan…';
+  queue(id,patch,true).then(function(){closeModal();toast('Week '+weekNo(S.week)+' is afgerond.');S.filter='all'})
+    .catch(function(){btn.disabled=false;btn.textContent='Telling afronden';err.textContent='Afronden is niet gelukt. Controleer je verbinding en probeer het opnieuw.';err.hidden=false});
+}
+
+/* ---------- OVERZICHT ---------- */
+function niceMax(m){if(!(m>0))return 1;var p=Math.pow(10,Math.floor(Math.log10(m))),s=[1,2,2.5,5,10];for(var i=0;i<s.length;i++)if(s[i]*p>=m)return s[i]*p;return 10*p}
+function eurK(v){return v>=10000?'€ '+nf.format(Math.round(v/100)/10)+'k':'€ '+nf.format(Math.round(v))}
+function barChart(data){
+  var W=640,H=200,pl=58,pr=14,pt=22,pb=26,iw=W-pl-pr,ih=H-pt-pb,max=niceMax(Math.max.apply(null,data.map(function(d){return d.v}).concat([0])));
+  var slot=iw/Math.max(data.length,8),bw=Math.min(30,slot-6),s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Staafdiagram; dezelfde cijfers staan in de tabel Tellingen">';
+  [0,.5,1].forEach(function(f){var y=pt+ih-ih*f;s+='<line class="grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y+'" y2="'+y+'"/><text class="ax" x="'+(pl-8)+'" y="'+(y+4)+'" text-anchor="end">'+esc(eurK(max*f))+'</text>'});
+  data.forEach(function(d,i){
+    var v=Math.max(0,d.v),h=ih*v/max,x=pl+slot*i+(slot-bw)/2,y=pt+ih-h,r=Math.min(4,h),y0=pt+ih;
+    if(h>0)s+='<path class="b" data-tip="'+esc(d.tip)+'" d="M'+x+','+y0+'V'+(y+r)+'Q'+x+','+y+' '+(x+r)+','+y+'H'+(x+bw-r)+'Q'+(x+bw)+','+y+' '+(x+bw)+','+(y+r)+'V'+y0+'Z"><title>'+esc(d.tip)+'</title></path>';
+    s+='<rect x="'+(pl+slot*i)+'" y="'+pt+'" width="'+slot+'" height="'+ih+'" fill="transparent" data-tip="'+esc(d.tip)+'"/>';
+    if(data.length<=8||i%2===(data.length-1)%2)s+='<text class="ax" x="'+(x+bw/2)+'" y="'+(H-8)+'" text-anchor="middle">wk '+d.wk+'</text>';
+    if(i===data.length-1)s+='<text class="lab" x="'+(x+bw/2)+'" y="'+(y-6)+'" text-anchor="middle">'+esc(eurK(v))+'</text>';
+  });
+  return s+'</svg>';
+}
+function locSummary(loc){
+  var d=doneCounts(loc),last=d[d.length-1],cur=cnt(loc,NOW_WEEK);
+  return {last:last,value:last?analyse(loc,last,d[d.length-2]||null).value:null,cur:cur};
+}
+function renderOverzicht(){
+  var loc=S.loc,h='<section class="loccards">';
+  Object.keys(LOCS).forEach(function(l){var s=locSummary(l);
+    h+='<button class="loccard" data-loc="'+l+'" aria-pressed="'+(l===loc)+'"><span class="eyebrow">'+esc(LOCS[l])+'</span><span class="big num">'+(s.value==null?'Nog geen telling':eur(s.value))+'</span>'
+      +'<span class="rowflex"><span class="muted" style="font-size:13px">Week '+weekNo(NOW_WEEK)+':</span>'+statusPill(s.cur||{loc:l,week:NOW_WEEK,qty:{},inn:{}})+'</span></button>'});
+  h+='</section>';
+  var d=doneCounts(loc);
+  if(!d.length){
+    h+='<div class="card empty"><h3>Nog geen afgeronde telling voor '+esc(LOCS[loc])+'</h3><p>Na de eerste telling zie je hier de voorraadwaarde. Vanaf de tweede telling komen daar het verbruik per week, de drankkosten en de aandachtspunten bij.</p><p><a class="btn primary" href="#tellen" style="display:inline-block;text-decoration:none">Naar de telling</a></p></div>';
+    $('#view').innerHTML=h;return;
+  }
+  var last=d[d.length-1],prev=d[d.length-2]||null,A=analyse(loc,last,prev),Ap=prev?analyse(loc,prev,d[d.length-3]||null):null;
+  var perWeek=A.usageValue!=null?A.usageValue/A.gap:null,kost=(A.usageValue!=null&&typeof last.omzet==='number'&&last.omzet>0)?A.usageValue/last.omzet:null;
+  h+='<section class="stack"><div class="spread"><h2>'+esc(LOCS[loc])+' · week '+weekNo(last.week)+'</h2><span class="muted" style="font-size:13px">Laatste afgeronde telling'+(last.closedAt?', '+esc(dateShort(last.closedAt)):'')+(nameOf(last.closedBy)?' door '+esc(nameOf(last.closedBy)):'')+'</span></div>';
+  h+='<div class="stats"><div class="stat"><span class="eyebrow">Voorraadwaarde</span><span class="v num">'+eur(A.value)+'</span><span class="d">'+(Ap?(A.value-Ap.value>=0?'+':'−')+eur(Math.abs(A.value-Ap.value)).replace('€','€')+' t.o.v. week '+weekNo(prev.week):'inkoop excl. btw')+'</span></div>'
+    +'<div class="stat"><span class="eyebrow">Verbruik per week</span><span class="v num">'+(perWeek==null?'–':eur(perWeek))+'</span><span class="d">'+(perWeek==null?'vanaf de tweede telling':'inkoopwaarde'+(A.gap>1?', gemiddeld over '+A.gap+' weken':''))+'</span></div>'
+    +'<div class="stat"><span class="eyebrow">Drankkosten</span><span class="v num">'+(kost==null?'–':pct(kost))+'</span><span class="d">'+(kost==null?'vul de drankomzet in bij het afronden':'verbruik ÷ omzet '+eur(last.omzet))+'</span></div>'
+    +'<div class="stat"><span class="eyebrow">Weken voorraad</span><span class="v num">'+(perWeek>0?num(Math.round(A.value/perWeek*10)/10):'–')+'</span><span class="d">voorraadwaarde ÷ weekverbruik</span></div></div>';
+  /* tel-discipline: laatste 8 weken */
+  h+='<div class="card stack"><div class="spread"><h3>Wekelijkse telling, laatste 8 weken</h3><span class="muted" style="font-size:13px">groen = afgerond · geel = bezig · rood = gemist</span></div><div class="weeks">';
+  for(var i=7;i>=0;i--){var w=shiftWeek(NOW_WEEK,-i),cc=S.counts[cid(loc,w)],first=d[0].week;
+    var st=cc&&cc.status==='done'?'done':cc?'open':(w<first?'':(w===NOW_WEEK?'':'miss'));
+    h+='<div class="wkbox '+st+'" title="'+(st==='done'?'Afgerond':st==='open'?'Bezig, nog niet afgerond':st==='miss'?'Geen telling':'')+'">wk<b>'+weekNo(w)+'</b></div>'}
+  h+='</div></div>';
+  /* grafieken */
+  var hist=d.slice(-12),vals=[],uses=[];
+  hist.forEach(function(c,i){var pi=d.indexOf(c)-1,a=analyse(loc,c,pi>=0?d[pi]:null);
+    vals.push({wk:weekNo(c.week),v:a.value,tip:'Week '+weekNo(c.week)+': voorraad '+eur(a.value)});
+    if(a.usageValue!=null)uses.push({wk:weekNo(c.week),v:a.usageValue/a.gap,tip:'Week '+weekNo(c.week)+': verbruik '+eur(a.usageValue/a.gap)+' per week'})});
+  h+='<div class="charts"><div class="card chart stack"><h3>Voorraadwaarde per telling</h3>'+barChart(vals)+'</div><div class="card chart stack"><h3>Verbruik per week (inkoopwaarde)</h3>'+(uses.length?barChart(uses):'<p class="muted" style="margin:0">Beschikbaar vanaf de tweede afgeronde telling.</p>')+'</div></div>';
+  /* aandachtspunten */
+  var sig=[],it=itemsOf(loc);
+  A.rows.filter(function(r){return r.neg}).forEach(function(r){sig.push(['bad','Telfout?','<b>'+esc(r.p.name)+'</b>: '+num(r.end)+' geteld, terwijl er hooguit '+num(r.begin+r.inn)+' kan staan (vorige telling '+num(r.begin)+' + geleverd '+num(r.inn)+'). Levering vergeten of verkeerd geteld.'])});
+  if(d.length>=4){var a1=analyse(loc,d[d.length-2],d[d.length-3]),a2=analyse(loc,d[d.length-3],d[d.length-4]),z={},dead=[];
+    [a1,a2].forEach(function(a){a.rows.forEach(function(r){if(r.usage!=null&&Math.abs(r.usage)<0.05)z[r.id]=(z[r.id]||0)+1})});
+    A.rows.forEach(function(r){if(r.usage!=null&&Math.abs(r.usage)<0.05&&z[r.id]===2&&r.end>0)dead.push(r)});
+    if(dead.length){var dv=0;dead.forEach(function(r){dv+=r.value});sig.push(['warn','Stilstaand','<b>'+eur(dv)+' voorraad zonder verbruik in 3 tellingen</b>: '+esc(dead.sort(function(a,b){return b.value-a.value}).slice(0,8).map(function(r){return r.p.name}).join(', '))+(dead.length>8?' en '+(dead.length-8)+' andere':'')+'.'])}}
+  var low=A.rows.filter(function(r){return typeof r.p.par==='number'&&r.end!=null&&r.end<r.p.par&&r.p.active!==false});
+  if(low.length)sig.push(['warn','Onder minimum','<b>'+low.length+' product'+(low.length>1?'en':'')+' onder het minimum</b>: '+esc(low.slice(0,8).map(function(r){return r.p.name+' ('+num(r.end)+'/'+num(r.p.par)+')'}).join(', '))+(low.length>8?' …':'')+'. Zie Bestellen.']);
+  var np=prodList(loc).filter(function(x){return typeof x.p.price!=='number'}),es=prodList(loc).filter(function(x){return x.p.est});
+  if(np.length)sig.push(['warn','Prijs ontbreekt','Zonder inkoopprijs tellen deze niet mee in de waarde: '+esc(np.map(function(x){return x.p.name}).join(', '))+'. Vul de prijs in bij Producten.']);
+  if(es.length)sig.push(['','Schatting','Inkoopprijs is een schatting, controleer met de factuur: '+esc(es.map(function(x){return x.p.name}).join(', '))+'.']);
+  d.forEach(function(c,i){if(i&&weeksBetween(d[i-1].week,c.week)>1&&i>=d.length-4)sig.push(['','Gat','Tussen week '+weekNo(d[i-1].week)+' en week '+weekNo(c.week)+' is niet geteld. Het verbruik over die periode is gelijkmatig over de weken verdeeld.'])});
+  h+='<div class="card stack"><h3>Aandachtspunten</h3>'+(sig.length?'<div class="sig">'+sig.map(function(s){return '<div class="sig-item"><span class="pill '+s[0]+'">'+esc(s[1])+'</span><span>'+s[2]+'</span></div>'}).join('')+'</div>':'<p class="muted" style="margin:0">Geen bijzonderheden in de laatste telling.</p>')+'</div>';
+  /* per categorie */
+  var cat={},tu=0;A.rows.forEach(function(r){var k=r.p.cat;cat[k]=cat[k]||{v:0,u:0};cat[k].v+=r.value;cat[k].u+=r.usageValue;});
+  Object.keys(cat).forEach(function(k){tu+=Math.max(0,cat[k].u)});
+  h+='<div class="card stack"><h3>Per categorie</h3><div class="tablewrap"><table><thead><tr><th>Categorie</th><th class="r">Voorraad</th><th class="r">Verbruik</th><th style="min-width:110px">Aandeel verbruik</th></tr></thead><tbody>'
+    +Object.keys(cat).sort(function(a,b){return catIdx(a)-catIdx(b)}).map(function(k){var sh=tu>0?Math.max(0,cat[k].u)/tu:0;
+      return '<tr><td>'+esc(k)+'</td><td class="r">'+eur(cat[k].v)+'</td><td class="r">'+(prev?eur(cat[k].u):'–')+'</td><td>'+(prev?'<span class="num">'+pct(sh)+'</span><span class="share" style="width:'+Math.round(sh*100)+'%"></span>':'–')+'</td></tr>'}).join('')
+    +'</tbody></table></div></div>';
+  /* per product */
+  if(prev){var top=A.rows.filter(function(r){return r.usage!=null&&(Math.abs(r.usage)>0.004||r.inn>0)}).sort(function(a,b){return b.usageValue-a.usageValue}),show=S.showAllUse?top:top.slice(0,15);
+    h+='<div class="card stack"><div class="spread"><h3>Verbruik per product, week '+weekNo(prev.week)+' → '+weekNo(last.week)+'</h3>'+(top.length>15?'<button class="btn" id="alluse">'+(S.showAllUse?'Toon top 15':'Toon alle '+top.length)+'</button>':'')+'</div><div class="tablewrap"><table><thead><tr><th>Product</th><th class="r">Begin</th><th class="r">Geleverd</th><th class="r">Eind</th><th class="r">Verbruik</th><th class="r">Waarde</th></tr></thead><tbody>'
+      +show.map(function(r){return '<tr><td>'+esc(r.p.name)+'<div class="muted" style="font-size:12.5px">'+esc(r.p.unit)+'</div></td><td class="r">'+num(r.begin)+'</td><td class="r">'+num(r.inn)+'</td><td class="r">'+num(r.end)+'</td><td class="r">'+(r.neg?'<span class="pill bad">'+num(r.usage)+'</span>':num(r.usage))+'</td><td class="r">'+(r.price==null?'–':eur(r.usageValue))+'</td></tr>'}).join('')
+      +'</tbody></table></div></div>'}
+  /* log + export */
+  h+='<div class="card stack"><div class="spread"><h3>Tellingen</h3><button class="btn" id="csv">Download alle cijfers (CSV)</button></div><div class="tablewrap"><table><thead><tr><th>Week</th><th>Afgerond</th><th class="r">Voorraad</th><th class="r">Verbruik/wk</th><th class="r">Omzet</th><th class="r">Drankkosten</th><th>Opmerking</th></tr></thead><tbody>'
+    +d.slice().reverse().slice(0,26).map(function(c){var i=d.indexOf(c),a=analyse(loc,c,i>0?d[i-1]:null),k=a.usageValue!=null&&c.omzet>0?a.usageValue/c.omzet:null,n=nameOf(c.closedBy);
+      return '<tr><td class="num">'+weekNo(c.week)+' <span class="muted">'+c.week.slice(0,4)+'</span></td><td>'+esc(dateShort(c.closedAt))+(n?'<div class="muted" style="font-size:12.5px">'+esc(n)+'</div>':'')+'</td><td class="r">'+eur(a.value)+'</td><td class="r">'+(a.usageValue==null?'–':eur(a.usageValue/a.gap))+'</td><td class="r">'+(typeof c.omzet==='number'?eur(c.omzet):'–')+'</td><td class="r">'+pct(k)+'</td><td>'+esc(c.note||'')+'</td></tr>'}).join('')
+    +'</tbody></table></div></div></section>';
+  $('#view').innerHTML=h;
+}
+function buildCsv(){
+  var L=[['Locatie','Week','Afgerond op','Categorie','Product','Eenheid','Leverancier','Beginvoorraad','Geleverd','Eindvoorraad','Verbruik','Weken sinds vorige telling','Inkoopprijs excl. btw','Voorraadwaarde','Verbruikswaarde','Drankomzet week excl. btw']];
+  function c(v){if(typeof v==='number')return String(r2(v)).replace('.',',');v=String(v==null?'':v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+  Object.keys(LOCS).forEach(function(loc){var d=doneCounts(loc);d.forEach(function(k,i){var a=analyse(loc,k,i?d[i-1]:null);
+    a.rows.forEach(function(r){L.push([LOCS[loc],k.week,(k.closedAt||'').slice(0,10),r.p.cat,r.p.name,r.p.unit,r.p.sup||'',r.begin,r.inn,r.end,r.usage,a.gap,r.price,r.value,r.usage==null?null:r.usageValue,typeof k.omzet==='number'?k.omzet:null])})})});
+  return '﻿'+L.map(function(r){return r.map(c).join(';')}).join('\r\n');
+}
+function exportCsv(){
+  var csv=buildCsv(),name='drankvoorraad-'+new Date().toISOString().slice(0,10)+'.csv';
+  function fallback(){openModal('<h2>Cijfers kopiëren</h2><p class="muted" style="margin:0">Downloaden kan in deze weergave niet. Kopieer de tekst en plak hem in Excel (kolommen gescheiden door puntkomma).</p><textarea class="input" id="csvtxt" readonly>'+esc(csv)+'</textarea><div class="spread"><button class="btn ghost" data-close>Sluiten</button><button class="btn primary" data-copy="#csvtxt">Kopieer alles</button></div>')}
+  if(!S.dl){fallback();return}
+  S.dl.save({filename:name,data:csv}).then(function(){toast('Bestand opgeslagen.')}).catch(function(e){if(e&&e.code==='declined')return;if(e&&e.code==='rate_limited'){toast('Er staat al een downloadvraag open.');return}fallback()});
+}
+
+/* ---------- BESTELLEN ---------- */
+function orderLines(loc){
+  var d=doneCounts(loc);if(!d.length)return null;
+  var last=d[d.length-1],au=avgUsage(loc),bySup={};
+  prodList(loc).forEach(function(x){
+    var p=x.p,stock=n0(last.qty&&last.qty[x.id]),target=null,why='';
+    if(typeof p.par==='number'){target=p.par;why='minimum '+num(p.par)}
+    else if(au.avg[x.id]>0){target=Math.ceil(au.avg[x.id]*COVER);why='verbruik '+num(au.avg[x.id])+'/wk'}
+    if(target==null||stock>=target)return;
+    var pack=p.pack>1?p.pack:1,packs=Math.ceil((target-stock)/pack-1e-9),sup=p.sup||'Leverancier onbekend';
+    (bySup[sup]=bySup[sup]||[]).push({p:p,stock:stock,target:target,why:why,packs:packs,units:packs*pack});
+  });
+  return {last:last,bySup:bySup,weeks:au.weeks};
+}
+function orderText(sup,lines){return sup+'\n'+lines.map(function(l){return '- '+l.packs+' × '+(l.p.packName||'stuk')+' '+l.p.name+' ('+(l.p.pack>1?l.p.pack+' × ':'')+l.p.unit+')'+(l.p.art?' art. '+l.p.art:'')}).join('\n')}
+function renderBestellen(){
+  var loc=S.loc,o=orderLines(loc),h='<section class="stack"><h2>Bestellijst '+esc(LOCS[loc])+'</h2>';
+  if(!o){h+='<div class="card empty"><h3>Nog geen afgeronde telling</h3><p>De bestellijst wordt gemaakt uit de laatste afgeronde telling. Rond eerst een telling af.</p></div></section>';$('#view').innerHTML=h;return}
+  var sups=Object.keys(o.bySup).sort();
+  h+='<p class="muted" style="margin:0;max-width:65ch">Op basis van de telling van week '+weekNo(o.last.week)+'. Een product komt op de lijst als de voorraad onder het doel zit. Het doel is het minimum dat bij Producten is ingesteld; zonder minimum is het '+String(COVER).replace('.',',')+' × het gemiddelde weekverbruik'+(o.weeks?(o.weeks===1?' (laatste week)':' (laatste '+o.weeks+' weken)'):', zodra er twee tellingen zijn')+'.</p>';
+  if(!sups.length)h+='<div class="card empty"><h3>Niets te bestellen</h3><p>'+(o.weeks?'Alle producten zitten op of boven hun doel.':'Er is nog maar één telling en er zijn geen minimumvoorraden ingesteld. Stel minimums in bij Producten, of wacht op de tweede telling.')+'</p></div>';
+  sups.forEach(function(s,i){var L=o.bySup[s];
+    h+='<div class="card stack"><div class="spread"><h3>'+esc(s)+' <span class="muted" style="font-weight:500">· '+L.length+' regel'+(L.length>1?'s':'')+'</span></h3><button class="btn" data-copytext="'+esc(orderText(s,L))+'">Kopieer voor bestelling</button></div><div class="tablewrap"><table><thead><tr><th>Product</th><th class="r">Bestellen</th></tr></thead><tbody>'
+      +L.map(function(l){return '<tr><td>'+esc(l.p.name)+'<div class="muted" style="font-size:12.5px">'+esc(l.p.unit)+(l.p.art?' · art. '+esc(l.p.art):'')+'</div><div class="muted num" style="font-size:12.5px">voorraad '+num(l.stock)+' · doel '+num(l.target)+' ('+esc(l.why)+')</div></td><td class="r"><b>'+l.packs+' × '+esc(l.p.packName||'stuk')+'</b>'+(l.p.pack>1?'<div class="muted" style="font-size:12.5px">= '+num(l.units)+' stuks</div>':'')+'</td></tr>'}).join('')
+      +'</tbody></table></div></div>'});
+  $('#view').innerHTML=h+'</section>';
+}
+
+/* ---------- PRODUCTEN ---------- */
+function renderProducten(){
+  var loc=S.loc,all=prodList(loc,true),act=all.filter(function(x){return x.p.active!==false}).length;
+  var h='<section class="stack"><div class="spread"><div><h2>Producten '+esc(LOCS[loc])+'</h2><span class="muted">'+act+' actief'+(all.length>act?' · '+(all.length-act)+' niet actief':'')+'</span></div>'+(S.canWrite?'<button class="btn primary" id="addprod">Product toevoegen</button>':'')+'</div>'
+    +'<input class="input" id="pq" type="search" placeholder="Zoek product of leverancier" value="'+esc(S.pq)+'" aria-label="Zoek product"><div id="plist"></div></section>';
+  $('#view').innerHTML=h;renderProdList();
+}
+function renderProdList(){
+  var el=$('#plist');if(!el)return;
+  var q=S.pq.trim().toLowerCase(),all=prodList(S.loc,true).filter(function(x){return !q||(x.p.name+' '+x.p.cat+' '+(x.p.sup||'')).toLowerCase().indexOf(q)>=0});
+  if(!all.length){el.innerHTML='<div class="empty"><h3>'+(q?'Geen producten gevonden':'Nog geen producten')+'</h3><p>'+(q?'Pas je zoekterm aan.':'Voeg het eerste product toe met de knop hierboven.')+'</p></div>';return}
+  var h='',cur=null;
+  all.forEach(function(x){var p=x.p;
+    if(p.cat!==cur){if(cur!==null)h+='</div>';cur=p.cat;h+='<div class="cat-head"><h3>'+esc(cur)+'</h3></div><div class="rows">'}
+    h+='<button type="button" class="prow'+(p.active===false?' off':'')+'" data-edit="'+esc(x.id)+'"'+(S.canWrite?'':' disabled')+'><span class="row-main"><span class="row-name" style="display:block">'+esc(p.name)+(p.active===false?' <span class="pill">niet actief</span>':'')+'</span><span class="row-sub">'+esc(p.unit)+' · '+(typeof p.price==='number'?eur(p.price)+(p.est?' (schatting)':''):'<span class="pill warn">prijs ontbreekt</span>')+(typeof p.par==='number'?' · minimum '+num(p.par):'')+(typeof p.tare==='number'?' · leeg '+num(p.tare)+' kg':'')+(p.pack>1?' · '+esc(p.packName||'verpakking')+' van '+p.pack:'')+(p.sup?' · '+esc(p.sup):'')+'</span></span><span class="chev" aria-hidden="true">›</span></button>'});
+  el.innerHTML=h+'</div>';
+}
+function openProduct(pid){
+  var loc=S.loc,p=pid?itemsOf(loc)[pid]:{cat:CATS[0],pack:1,active:true},cats=CATS.slice();
+  prodList(loc,true).forEach(function(x){if(cats.indexOf(x.p.cat)<0)cats.push(x.p.cat)});
+  function f(id,label,val,extra,small){return '<div class="field"><label for="'+id+'">'+label+'</label><input class="input" id="'+id+'" value="'+esc(val==null?'':val)+'" '+(extra||'')+'>'+(small?'<small>'+small+'</small>':'')+'</div>'}
+  var h='<h2>'+(pid?'Product bewerken':'Product toevoegen')+'</h2><p class="muted" style="margin:0">'+esc(LOCS[loc])+'</p>'
+    +f('p-name','Naam',p.name,'autocomplete="off"')
+    +'<div class="grid2"><div class="field"><label for="p-cat">Categorie</label><select class="input" id="p-cat">'+cats.map(function(c){return '<option'+(c===p.cat?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></div>'
+    +f('p-unit','Tel-eenheid',p.unit,'placeholder="bv. flesje 20 cl, fles 70 cl, fust 20 L"','Wat je telt als 1.')+'</div>'
+    +'<div class="grid2">'+f('p-price','Inkoopprijs per tel-eenheid, excl. btw',typeof p.price==='number'?inStr(p.price):'','inputmode="decimal" placeholder="bv. 0,54"','Kratprijs ÷ aantal flesjes.')
+    +f('p-par','Minimumvoorraad',typeof p.par==='number'?inStr(p.par):'','inputmode="decimal" placeholder="leeg = op basis van verbruik"','Onder dit aantal komt het op de bestellijst.')+'</div>'
+    +'<div class="grid2">'+f('p-pack','Aantal per bestel-eenheid',p.pack||1,'inputmode="numeric"','bv. 24 flesjes per krat.')+f('p-packname','Naam bestel-eenheid',p.packName,'placeholder="krat, doos, fust, fles"')+'</div>'
+    +'<div class="grid2">'+f('p-sup','Leverancier',p.sup,'placeholder="bv. Sligro"')+f('p-art','Artikelnummer (optioneel)',p.art)+'</div>'
+    +'<div class="grid2">'+f('p-tare','Leeggewicht in kg (optioneel)',typeof p.tare==='number'?inStr(p.tare):'','inputmode="decimal" placeholder="bv. gewicht van een leeg fust"','Vul dit in om het product te kunnen wegen bij het tellen.')+f('p-vol','Inhoud in liter (optioneel)',typeof p.vol==='number'?inStr(p.vol):'','inputmode="decimal" placeholder="'+(pid&&volOf(p)!=null?inStr(volOf(p)):'bv. 20')+'"','Leeg = afgeleid uit de tel-eenheid.')+'</div>'
+    +'<label class="rowflex"><input type="checkbox" id="p-active"'+(p.active===false?'':' checked')+' style="width:20px;height:20px"> <span>Actief: staat op de tellijst</span></label>'
+    +'<div class="note bad" id="p-err" hidden></div>'
+    +'<div class="spread"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="p-save" data-pid="'+esc(pid||'')+'">Opslaan</button></div>';
+  openModal(h);
+}
+function doSaveProduct(){
+  var loc=S.loc,pid=$('#p-save').dataset.pid,old=pid?itemsOf(loc)[pid]:null,err=$('#p-err');
+  function bad(m){err.textContent=m;err.hidden=false}
+  var name=$('#p-name').value.trim(),unit=$('#p-unit').value.trim(),price=parseNum($('#p-price').value.replace('€','')),par=parseNum($('#p-par').value),pack=parseNum($('#p-pack').value),tare=parseNum($('#p-tare').value),vol=parseNum($('#p-vol').value);
+  if(tare===undefined||vol===undefined)return bad('Leeggewicht en inhoud moeten getallen zijn, bv. 7,5 en 20.');
+  if(!name)return bad('Vul een naam in.');
+  if(!unit)return bad('Vul de tel-eenheid in, bv. flesje 20 cl.');
+  if(price===undefined)return bad('De inkoopprijs is geen geldig bedrag. Gebruik bv. 0,54.');
+  if(par===undefined)return bad('De minimumvoorraad is geen geldig getal.');
+  if(pack===undefined||pack===null||pack<1)pack=1;
+  var p={name:name.slice(0,80),cat:$('#p-cat').value,unit:unit.slice(0,40),price:price,par:par,pack:Math.round(pack),packName:$('#p-packname').value.trim().slice(0,20)||(pack>1?'verpakking':'stuk'),
+    tare:tare,vol:vol,sup:$('#p-sup').value.trim().slice(0,40),art:$('#p-art').value.trim().slice(0,30),active:$('#p-active').checked,
+    ord:old&&typeof old.ord==='number'?old.ord:Date.now()%1e9,est:old&&old.est&&old.price===price?true:false};
+  if(!pid)pid=loc.charAt(0)+'-'+(slug(name+' '+unit)||'product').slice(0,60)+'-'+Math.random().toString(36).slice(2,6);
+  var b=$('#p-save');b.disabled=true;b.textContent='Opslaan…';
+  saveProduct(loc,pid,p).then(function(){closeModal();toast('Product opgeslagen.')}).catch(function(e){b.disabled=false;b.textContent='Opslaan';bad(e&&e.code==='invalid_argument'?'Producten wijzigen is op dit moment niet toegestaan.':'Opslaan is niet gelukt. Controleer je verbinding en probeer het opnieuw.')});
+}
+
+/* ---------- gebeurtenissen ---------- */
+function copyText(txt,btn){
+  function ok(){toast('Gekopieerd.')}
+  function fb(){openModal('<h2>Kopiëren</h2><p class="muted" style="margin:0">Selecteer de tekst en kopieer hem.</p><textarea class="input" readonly>'+esc(txt)+'</textarea><div class="spread"><span></span><button class="btn" data-close>Sluiten</button></div>');var t=$('#modal textarea');t.focus();t.select()}
+  try{navigator.clipboard.writeText(txt).then(ok,fb)}catch(e){fb()}
+}
+document.addEventListener('click',function(e){
+  var t=e.target,b;
+  if((b=t.closest('a[href^="#"]'))){var hv=b.getAttribute('href').slice(1);if(VIEWS.indexOf(hv)>=0){e.preventDefault();if(hv!==S.view){S.view=hv;render();window.scrollTo(0,0)}try{if(location.hash!=='#'+hv)location.hash=hv}catch(x){}return}}
+  if((b=t.closest('#locseg button,.loccard'))){S.loc=b.dataset.loc;ls('loc',S.loc);S.q='';S.pq='';S.filter='all';render();return}
+  if(t.closest('[data-close]')||t.id==='modal'){closeModal();return}
+  if((b=t.closest('[data-copy]'))){var ta=$(b.dataset.copy);copyText(ta.value);return}
+  if((b=t.closest('[data-copytext]'))){copyText(b.getAttribute('data-copytext'));return}
+  if(t.closest('#wkprev')){S.week=shiftWeek(S.week,-1);S.filter='all';render();return}
+  if(t.closest('#wknext')){if(S.week<NOW_WEEK){S.week=shiftWeek(S.week,1);S.filter='all';render()}return}
+  if((b=t.closest('#modeseg button'))){S.mode=b.dataset.mode;S.filter='all';render();return}
+  if((b=t.closest('[data-filter]'))){S.filter=b.dataset.filter;render();return}
+  if((b=t.closest('[data-jump]'))){var s=$('#cat-'+b.dataset.jump);if(s)s.scrollIntoView({block:'start'});else{S.q='';S.filter='all';render();s=$('#cat-'+b.dataset.jump);if(s)s.scrollIntoView({block:'start'})}return}
+  if((b=t.closest('.st'))){var inp=$('.qty',b.closest('.row')),v=parseNum(inp.value);if(v===undefined||v===null)v=b.dataset.step>0?0:1;v=Math.max(0,r2(v+(+b.dataset.step)));inp.value=inStr(v);inp.classList.remove('invalid');onQtyInput(inp);return}
+  if((b=t.closest('[data-weigh]'))){openWeigh(b.closest('.row').dataset.pid);return}
+  if(t.closest('#w-ok')){doWeigh();return}
+  if(t.closest('#finish')){openFinish();return}
+  if(t.closest('#f-ok')){doFinish();return}
+  if(t.closest('#reopen')){queue(cid(S.loc,S.week),{status:'open'},true).then(function(){toast('Telling heropend. Vergeet niet opnieuw af te ronden.')}).catch(function(){});return}
+  if(t.closest('#alluse')){S.showAllUse=!S.showAllUse;render();return}
+  if(t.closest('#csv')){exportCsv();return}
+  if(t.closest('#addprod')){openProduct(null);return}
+  if((b=t.closest('[data-edit]'))){openProduct(b.dataset.edit);return}
+  if(t.closest('#p-save')){doSaveProduct();return}
+});
+document.addEventListener('input',function(e){
+  var t=e.target;
+  if(t.classList.contains('qty')){onQtyInput(t);return}
+  if(t.closest('#weighform')){updWeigh();return}
+  if(t.id==='q'){S.q=t.value;var l=$('#list');if(l){var c=cnt(S.loc,S.week),done=c&&c.status==='done';l.innerHTML=listHtml(tellenRows(),c,prevDone(S.loc,S.week),!S.canWrite||done,prodList(S.loc));updProgress()}return}
+  if(t.id==='pq'){S.pq=t.value;renderProdList();return}
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&!$('#modal').hidden){closeModal();return}
+  if(e.key==='Enter'&&e.target.classList&&e.target.classList.contains('qty')){e.preventDefault();var all=$all('#list .qty'),i=all.indexOf(e.target);if(all[i+1]){all[i+1].focus();all[i+1].select()}else e.target.blur()}
+});
+document.addEventListener('focusin',function(e){if(e.target.classList&&e.target.classList.contains('qty'))setTimeout(function(){try{e.target.select()}catch(x){}},0)});
+document.addEventListener('toggle',function(e){if(e.target.classList&&e.target.classList.contains('help'))ls('help',e.target.open?'1':'0')},true);
+document.addEventListener('pointermove',function(e){var t=e.target.closest?e.target.closest('[data-tip]'):null,tip=$('#tip');if(!t){tip.hidden=true;return}tip.textContent=t.getAttribute('data-tip');tip.hidden=false;var w=tip.offsetWidth;tip.style.left=Math.max(8,Math.min(window.innerWidth-w-8,e.clientX-w/2))+'px';tip.style.top=Math.max(8,e.clientY-38)+'px'});
+document.addEventListener('pointerleave',function(){$('#tip').hidden=true},true);
+window.addEventListener('hashchange',function(){var v=(location.hash||'').slice(1);if(VIEWS.indexOf(v)>=0&&v!==S.view){S.view=v;render();window.scrollTo(0,0)}});
+window.addEventListener('online',function(){Object.keys(Q).forEach(function(k){flush(k)})});
+window.addEventListener('beforeunload',function(){Object.keys(Q).forEach(function(k){flush(k)})});
+document.addEventListener('visibilitychange',function(){if(document.hidden)Object.keys(Q).forEach(function(k){flush(k)})});
+
+/* ---------- start ---------- */
+function fail(t,m){S.failed={t:t,m:m};render()}
+function start(){
+  if(!S.view)S.view='tellen';
+  render();
+  if(!window.claude||!window.claude.use){fail('De website is niet goed geladen','Laad de pagina opnieuw. Blijft dit terugkomen, meld het bij de eigenaar.');return}
+  var slowT=setTimeout(function(){if(!ready()){S.slow=true;render()}},10000);
+  Promise.all([window.claude.use('db'),window.claude.use('user'),window.claude.use('downloads')]).then(function(r){
+    S.db=r[0];S.user=r[1];S.dl=r[2];
+    if(!S.db){clearTimeout(slowT);fail('De website is nog niet gekoppeld aan de database','De koppeling met de database ontbreekt. Meld dit bij de eigenaar.');return}
+    if(S.user){
+      S.user.me().then(function(me){S.uid=me.id||(ls('naam')?'naam:'+ls('naam'):null);if(S.uid&&!me.id)S.names[S.uid]=ls('naam');S.isOwner=!!me.isOwner;if(me.id&&me.name)S.names[me.id]=me.name;
+        if(!hashView&&S.isOwner&&S.view==='tellen'&&ready()&&doneCounts('floats').length+doneCounts('altstadt').length>0){S.view='overzicht';render()}});
+      S.user.can('data.write').then(function(c){if(c===false){S.canWrite=false;render()}});
+    }
+    function onErr(e){clearTimeout(slowT);fail('De voorraad is niet meer bereikbaar','Laad de pagina opnieuw. Blijft dit terugkomen, meld het bij de eigenaar.')}
+    Object.keys(LOCS).forEach(function(loc){
+      S.db.doc('catalog/'+loc).onSnapshot(function(s){
+        var d=s.exists?s.data():null;S.catalog[loc]={items:(d&&d.items)||{},_exists:!!s.exists};S.got[loc]=true;if(ready())clearTimeout(slowT);render(true);
+      },onErr);
+    });
+    S.db.collection('counts').limit(1000).onSnapshot(function(qs){
+      var m={};qs.docs.forEach(function(d){var x=d.data();if(x&&x.loc&&x.week)m[d.id]=x});
+      S.counts=m;S.got.counts=true;if(ready())clearTimeout(slowT);
+      if(!hashView&&S.isOwner&&S.view==='tellen'&&!S.autoView&&ready()&&doneCounts('floats').length+doneCounts('altstadt').length>0){S.autoView=true;S.view='overzicht'}
+      S.autoView=true;render(true);
+    },onErr);
+  });
+}
+start();
+})();
+</script>
+</body>
+</html>
