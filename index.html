@@ -2,6 +2,10 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<script>
+/* Altijd de beveiligde versie: wie via http binnenkomt op het eigen domein gaat door naar https://www. */
+if(location.protocol==='http:'&&/(^|\.)kadehoreca\.nl$/.test(location.hostname))location.replace('https://www.kadehoreca.nl'+location.pathname+location.search+location.hash);
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
