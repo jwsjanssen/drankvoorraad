@@ -1,20 +1,26 @@
 /* Koppeling tussen de app en Supabase.
    De app werkt met documenten op een pad ("catalog/floats", "counts/floats_2026-W47").
    Dit bestand biedt daarvoor: doc(pad).get/set/update/onSnapshot en collection(pad).onSnapshot.
-   Alles staat in één tabel `voorraad_docs` (pad + json). Zie supabase/schema.sql. */
+   Alles staat in één tabel `voorraad_docs` (pad + json). Zie supabase/schema.sql.
+   Toegang: eerst inloggen met de toegangscode. De database controleert de code en geeft een
+   sessiesleutel terug; lezen en schrijven kan alleen met die sleutel (functies voorraad_*). */
 (function(){
 'use strict';
 var cfg=window.DV_CONFIG||{};
 var sb=(cfg.url&&cfg.key&&window.supabase)?window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false}}):null;
 var cache={},stamp={},busy={},ver={},subs=[],waiters=[],loaded=false,loading=false,started=false,maxStamp=null;
+var TOKEN_KEY='dv.token',token=null,gate=null;
+try{token=localStorage.getItem(TOKEN_KEY)||null}catch(e){}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function merge(t,s){Object.keys(s).forEach(function(k){var v=s[k];if(v&&typeof v==='object'&&!Array.isArray(v)){if(!t[k]||typeof t[k]!=='object'||Array.isArray(t[k]))t[k]={};merge(t[k],v)}else t[k]=v});return t}
 function prefixOf(path){return path.slice(0,path.lastIndexOf('/'))}
 function touch(path){ver[path]=(ver[path]||0)+1;var p='#'+prefixOf(path);ver[p]=(ver[p]||0)+1}
 function emit(){if(!loaded)return;subs.slice().forEach(function(f){try{f()}catch(e){console.error(e)}})}
+function noAccess(e){return !!(e&&e.code==='28000')}
 function toErr(e){
   var m=(e&&e.message)||String(e||'');
+  if(noAccess(e)){expire();return {code:'unavailable',message:m}}
   if(e&&(e.code==='42501'||e.status===401||e.status===403))return {code:'invalid_argument',message:m};
   if(!e||!e.code||/fetch|network|timeout|load failed/i.test(m))return {code:'unavailable',message:m};
   return {code:'failed',message:m};
@@ -28,11 +34,11 @@ function apply(row){
   return true;
 }
 function load(full){
-  if(!sb||loading)return;
+  if(!sb||loading||!token)return;
   loading=true;
-  var q=sb.from('voorraad_docs').select('path,data,updated_at');
-  if(!full&&loaded&&maxStamp)q=q.gt('updated_at',maxStamp);
-  q.then(function(r){
+  var args={p_token:token};
+  if(!full&&loaded&&maxStamp)args.p_since=maxStamp;
+  sb.rpc('voorraad_lezen',args).then(function(r){
     loading=false;
     if(r.error)throw r.error;
     var changed=false,seen={};
@@ -43,20 +49,16 @@ function load(full){
     if(changed||first)emit();
   }).then(null,function(e){
     loading=false;
+    if(noAccess(e)){expire();return}
     if(window.console)console.warn('Voorraad laden lukt niet:',e&&e.message);
     if(!loaded)setTimeout(function(){load(true)},4000);
   });
 }
 function start(){
   if(started||!sb)return;started=true;
-  load(true);
-  try{
-    sb.channel('docs-wijzigingen').on('postgres_changes',{event:'*',schema:'public',table:'voorraad_docs'},function(p){
-      if(p.eventType==='DELETE'){var op=p.old&&p.old.path;if(op&&cache[op]!==undefined&&!busy[op]){delete cache[op];delete stamp[op];touch(op);emit()}return}
-      if(apply(p.new))emit();
-    }).subscribe();
-  }catch(e){if(window.console)console.warn('Live-koppeling niet beschikbaar',e)}
-  setInterval(function(){if(!document.hidden)load(false)},30000);
+  if(token)load(true);else showGate();
+  /* Wijzigingen van collega's komen binnen door elke 10 seconden te vragen wat er nieuw is. */
+  setInterval(function(){if(!document.hidden)load(false)},10000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)load(false)});
   window.addEventListener('online',function(){load(true)});
 }
@@ -86,16 +88,16 @@ function doc(path){
     set:function(d){
       if(!sb)return Promise.reject({code:'unavailable'});
       cache[path]=clone(d);touch(path);begin(path);emit();
-      return sb.from('voorraad_docs').upsert({path:path,data:d}).select('data,updated_at').single()
+      return sb.rpc('voorraad_schrijven',{p_token:token,p_path:path,p_data:d})
         .then(function(r){finish(path,r)},function(e){failed(path,e)});
     },
     update:function(d){
       if(!sb)return Promise.reject({code:'unavailable'});
       if(cache[path]===undefined)return Promise.reject({code:'invalid_argument',message:'document bestaat niet'});
       cache[path]=merge(clone(cache[path]),clone(d));touch(path);begin(path);emit();
-      return sb.rpc('voorraad_doc_update',{p_path:path,p_patch:d}).then(function(r){
+      return sb.rpc('voorraad_bijwerken',{p_token:token,p_path:path,p_patch:d}).then(function(r){
         /* document is intussen verwijderd: zet het hele document terug */
-        if(r.error&&r.error.code==='P0002')return sb.from('voorraad_docs').upsert({path:path,data:cache[path]}).select('data,updated_at').single();
+        if(r.error&&r.error.code==='P0002')return sb.rpc('voorraad_schrijven',{p_token:token,p_path:path,p_data:cache[path]});
         return r;
       }).then(function(r){finish(path,r)},function(e){failed(path,e)});
     },
@@ -122,7 +124,47 @@ function collection(path){
   return q;
 }
 
-/* Nog geen inlogsysteem: iedereen mag lezen en schrijven; wie telt vult zijn naam in bij het afronden. */
+/* Inlogscherm: dekt de hele pagina af tot de juiste code is ingevoerd. */
+function expire(){
+  if(!token)return;
+  token=null;try{localStorage.removeItem(TOKEN_KEY)}catch(e){}
+  showGate('Je bent uitgelogd. Voer de toegangscode opnieuw in.');
+}
+function showGate(msg){
+  if(gate){if(msg)gate.querySelector('.gate-msg').textContent=msg;return}
+  gate=document.createElement('div');gate.className='gate';gate.setAttribute('role','dialog');gate.setAttribute('aria-modal','true');gate.setAttribute('aria-labelledby','gate-h');
+  gate.innerHTML='<form class="gate-card" novalidate>'
+    +'<span class="brand-mark" aria-hidden="true"></span>'
+    +'<h1 id="gate-h">Drankvoorraad</h1>'
+    +'<p class="muted">FLOATS &amp; ALTSTADT. Voer de toegangscode in om verder te gaan.</p>'
+    +'<div class="field"><label for="gate-code">Toegangscode</label>'
+    +'<input class="input" id="gate-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="64" required></div>'
+    +'<p class="gate-msg" role="alert"></p>'
+    +'<button class="btn primary" type="submit">Inloggen</button>'
+    +'</form>';
+  document.body.appendChild(gate);
+  var form=gate.querySelector('form'),inp=gate.querySelector('#gate-code'),out=gate.querySelector('.gate-msg'),btn=gate.querySelector('button');
+  if(msg)out.textContent=msg;
+  form.addEventListener('submit',function(ev){
+    ev.preventDefault();
+    var code=inp.value.trim();
+    if(!code){out.textContent='Vul de toegangscode in.';inp.focus();return}
+    btn.disabled=true;btn.textContent='Controleren…';out.textContent='';
+    function again(t){btn.disabled=false;btn.textContent='Inloggen';out.textContent=t;inp.value='';inp.focus()}
+    sb.rpc('voorraad_login',{p_code:code}).then(function(r){
+      if(r.error)throw r.error;
+      var d=r.data||{};
+      if(d.ok&&d.token){
+        token=d.token;try{localStorage.setItem(TOKEN_KEY,token)}catch(e){}
+        gate.remove();gate=null;load(true);return;
+      }
+      again(d.reason==='locked'?'Te veel foute pogingen. Probeer het over een kwartier opnieuw.':'Die code klopt niet. Probeer het opnieuw.');
+    }).then(null,function(){again('Inloggen lukt nu niet. Controleer je internetverbinding en probeer het opnieuw.')});
+  });
+  setTimeout(function(){try{inp.focus()}catch(e){}},50);
+}
+
+/* Geen persoonlijke accounts: wie de code heeft mag lezen en schrijven; wie telt vult zijn naam in bij het afronden. */
 var user={
   me:function(){return Promise.resolve({id:null,name:'',email:null,isOwner:false,canEdit:false})},
   can:function(){return Promise.resolve(true)},
