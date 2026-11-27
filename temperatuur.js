@@ -97,11 +97,6 @@ function seed(){
 }
 
 /* ---------- weergave ---------- */
-function footer(){
-  var h='<nav class="foot" aria-label="Andere pagina\'s"><span>Andere pagina\'s:</span>';
-  Object.keys(PAGES).forEach(function(k){if(k!==KEY)h+='<a href="../'+k+'/">'+PAGES[k].loc+' '+PAGES[k].area.toLowerCase()+'</a>'});
-  return h+'<a href="../">Drankvoorraad</a></nav>';
-}
 function render(){
   $all('.tabs a').forEach(function(a){if(a.getAttribute('href')==='#'+S.view)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
   var v=$('#view');
@@ -137,7 +132,7 @@ function renderDay(){
     });
     h+='</ul><div id="daynote"></div>';
   }
-  h+='</section>'+footer();
+  h+='</section>';
   $('#view').innerHTML=h;
   patchDay();
 }
@@ -228,7 +223,7 @@ function renderMonth(){
     +'<div class="dy"><b>'+esc(cap(monthLabel(mo)))+'</b><span class="muted">'+esc(P.loc+' · '+P.area)+'</span></div>'
     +'<button class="iconbtn" id="mnext" aria-label="Volgende maand"'+(cur?' disabled':'')+'>›</button></div>';
   if(!D.devs.length){
-    h+='<div class="card empty"><h3>Geen metingen in '+esc(monthLabel(mo))+'</h3><p>Zodra er temperaturen zijn ingevuld, zie je ze hier per dag terug.</p></div></section>'+footer();
+    h+='<div class="card empty"><h3>Geen metingen in '+esc(monthLabel(mo))+'</h3><p>Zodra er temperaturen zijn ingevuld, zie je ze hier per dag terug.</p></div></section>';
     $('#view').innerHTML=h;return;
   }
   h+='<div class="stats"><div class="stat"><span class="v num">'+D.stats.full+' <span class="muted" style="font-size:15px;font-weight:600">van '+D.stats.days+'</span></span><span class="l">dagen volledig gemeten</span></div>'
@@ -263,7 +258,7 @@ function renderMonth(){
     });
     h+='</ul>';
   }
-  h+='</div><div class="rowflex"><button class="btn" id="csv">Download '+esc(monthLabel(mo))+' (CSV)</button><span class="muted" style="font-size:13px">Alle metingen van deze maand, te openen in Excel.</span></div></section>'+footer();
+  h+='</div><div class="rowflex"><button class="btn" id="csv">Download '+esc(monthLabel(mo))+' (CSV)</button><span class="muted" style="font-size:13px">Alle metingen van deze maand, te openen in Excel.</span></div></section>';
   $('#view').innerHTML=h;
   var gw=$('#gridwrap'),tc=$('th.today',gw);
   if(gw&&tc)gw.scrollLeft=Math.max(0,tc.offsetLeft-gw.clientWidth+tc.offsetWidth+8);
@@ -298,7 +293,7 @@ function renderDevices(){
     });
     h+='</ul><p class="muted" style="font-size:13px">Tik op een apparaat om de naam of de norm aan te passen, of om het te verwijderen. Met de pijltjes zet je de lijst in de volgorde van je meetronde.</p>';
   }
-  h+='</section>'+footer();
+  h+='</section>';
   $('#view').innerHTML=h;
 }
 function openDevice(id){
