@@ -9,7 +9,8 @@
 var cfg=window.DV_CONFIG||{};
 var sb=(cfg.url&&cfg.key&&window.supabase)?window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false}}):null;
 var cache={},stamp={},busy={},ver={},subs=[],waiters=[],loaded=false,loading=false,started=false,maxStamp=null;
-var TOKEN_KEY='dv.token',token=null,gate=null;
+var PRE=(cfg.prefix||'voorraad')+'_';   /* voorraad_ op de echte site, voorraadtest_ op de testsite */
+var TOKEN_KEY=cfg.test?'dv.testtoken':'dv.token',token=null,gate=null;
 try{token=localStorage.getItem(TOKEN_KEY)||null}catch(e){}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -40,7 +41,7 @@ function load(full){
   if(!full&&loaded&&maxStamp)args.p_since=maxStamp;
   /* elke pagina haalt alleen haar eigen soort documenten op (voorraad: catalog+counts, temperaturen: temp+templog) */
   if(window.DV_PREFIXES)args.p_prefixes=window.DV_PREFIXES;
-  sb.rpc('voorraad_lezen',args).then(function(r){
+  sb.rpc(PRE+'lezen',args).then(function(r){
     loading=false;
     if(r.error)throw r.error;
     var changed=false,seen={};
@@ -90,16 +91,16 @@ function doc(path){
     set:function(d){
       if(!sb)return Promise.reject({code:'unavailable'});
       cache[path]=clone(d);touch(path);begin(path);emit();
-      return sb.rpc('voorraad_schrijven',{p_token:token,p_path:path,p_data:d})
+      return sb.rpc(PRE+'schrijven',{p_token:token,p_path:path,p_data:d})
         .then(function(r){finish(path,r)},function(e){failed(path,e)});
     },
     update:function(d){
       if(!sb)return Promise.reject({code:'unavailable'});
       if(cache[path]===undefined)return Promise.reject({code:'invalid_argument',message:'document bestaat niet'});
       cache[path]=merge(clone(cache[path]),clone(d));touch(path);begin(path);emit();
-      return sb.rpc('voorraad_bijwerken',{p_token:token,p_path:path,p_patch:d}).then(function(r){
+      return sb.rpc(PRE+'bijwerken',{p_token:token,p_path:path,p_patch:d}).then(function(r){
         /* document is intussen verwijderd: zet het hele document terug */
-        if(r.error&&r.error.code==='P0002')return sb.rpc('voorraad_schrijven',{p_token:token,p_path:path,p_data:cache[path]});
+        if(r.error&&r.error.code==='P0002')return sb.rpc(PRE+'schrijven',{p_token:token,p_path:path,p_data:cache[path]});
         return r;
       }).then(function(r){finish(path,r)},function(e){failed(path,e)});
     },
@@ -139,6 +140,7 @@ function showGate(msg){
     +'<span class="brand-mark" aria-hidden="true"></span>'
     +'<h1 id="gate-h">'+(window.DV_TITLE||'Drankvoorraad')+'</h1>'
     +'<p class="muted">FLOATS &amp; ALTSTADT. Voer de toegangscode in om verder te gaan.</p>'
+    +(cfg.test?'<p class="note warn">Dit is de testversie. Wat je hier invult, komt niet op de echte site.</p>':'')
     +'<div class="field"><label for="gate-code">Toegangscode</label>'
     +'<input class="input" id="gate-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="64" required></div>'
     +'<p class="gate-msg" role="alert"></p>'
@@ -153,7 +155,7 @@ function showGate(msg){
     if(!code){out.textContent='Vul de toegangscode in.';inp.focus();return}
     btn.disabled=true;btn.textContent='Controleren…';out.textContent='';
     function again(t){btn.disabled=false;btn.textContent='Inloggen';out.textContent=t;inp.value='';inp.focus()}
-    sb.rpc('voorraad_login',{p_code:code}).then(function(r){
+    sb.rpc(PRE+'login',{p_code:code}).then(function(r){
       if(r.error)throw r.error;
       var d=r.data||{};
       if(d.ok&&d.token){
@@ -183,6 +185,12 @@ var downloads={
     }catch(e){return Promise.reject({code:'unavailable'})}
   }
 };
+/* Testversie: vaste balk bovenin, zodat niemand de testsite voor de echte aanziet. */
+if(cfg.test){
+  var topEl=document.querySelector('.top');
+  if(topEl){var tb=document.createElement('div');tb.className='testbar';tb.textContent='Testversie · wat je hier invult, komt niet op de echte site';topEl.insertBefore(tb,topEl.firstChild)}
+  document.title='TEST · '+document.title;
+}
 var caps={db:sb?{doc:doc,collection:collection}:null,user:user,downloads:downloads};
 window.claude={use:function(n){return Promise.resolve(caps[n]||null)}};
 })();
