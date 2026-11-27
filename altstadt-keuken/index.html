@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script>
+/* Altijd de beveiligde versie: wie via http binnenkomt op het eigen domein gaat door naar https://www. */
+if(location.protocol==='http:'&&/(^|\.)kadehoreca\.nl$/.test(location.hostname))location.replace('https://www.kadehoreca.nl'+location.pathname+location.search+location.hash);
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Temp. keuken Altstadt">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23A8161C'/%3E%3Cpath d='M27 13a5 5 0 0 1 10 0v23a11 11 0 1 1-10 0z' fill='%23fff'/%3E%3Ccircle cx='32' cy='46' r='5.5' fill='%23A8161C'/%3E%3Crect x='30' y='24' width='4' height='20' fill='%23A8161C'/%3E%3C/svg%3E">
+<title>Temperaturen ALTSTADT keuken</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../temperatuur.css">
+</head>
+<body data-page="altstadt-keuken" data-loc="altstadt">
+
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Temperaturen</span></div>
+    <span class="where">ALTSTADT · Keuken</span>
+  </div>
+  <nav class="wrap tabs" aria-label="Onderdelen">
+    <a href="#vandaag">Vandaag</a><a href="#overzicht">Overzicht</a><a href="#apparaten">Apparaten</a>
+  </nav>
+</header>
+<main class="wrap" id="view">
+  <div class="empty"><h3>Temperaturen laden…</h3><p>De apparaten en metingen worden opgehaald.</p></div>
+</main>
+<div id="modal" hidden></div>
+<div id="toast" hidden role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="../config.js"></script>
+<script>window.DV_PREFIXES=['temp','templog'];window.DV_TITLE='Temperaturen';</script>
+<script src="../backend.js"></script>
+<script src="../temperatuur.js"></script>
+</body>
+</html>

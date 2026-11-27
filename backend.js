@@ -38,6 +38,8 @@ function load(full){
   loading=true;
   var args={p_token:token};
   if(!full&&loaded&&maxStamp)args.p_since=maxStamp;
+  /* elke pagina haalt alleen haar eigen soort documenten op (voorraad: catalog+counts, temperaturen: temp+templog) */
+  if(window.DV_PREFIXES)args.p_prefixes=window.DV_PREFIXES;
   sb.rpc('voorraad_lezen',args).then(function(r){
     loading=false;
     if(r.error)throw r.error;
@@ -135,7 +137,7 @@ function showGate(msg){
   gate=document.createElement('div');gate.className='gate';gate.setAttribute('role','dialog');gate.setAttribute('aria-modal','true');gate.setAttribute('aria-labelledby','gate-h');
   gate.innerHTML='<form class="gate-card" novalidate>'
     +'<span class="brand-mark" aria-hidden="true"></span>'
-    +'<h1 id="gate-h">Drankvoorraad</h1>'
+    +'<h1 id="gate-h">'+(window.DV_TITLE||'Drankvoorraad')+'</h1>'
     +'<p class="muted">FLOATS &amp; ALTSTADT. Voer de toegangscode in om verder te gaan.</p>'
     +'<div class="field"><label for="gate-code">Toegangscode</label>'
     +'<input class="input" id="gate-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="64" required></div>'

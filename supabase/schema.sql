@@ -1,11 +1,12 @@
 -- Drankvoorraad FLOATS & ALTSTADT: databasestructuur (Supabase-project CHECKLIJST).
 -- Alles heeft het voorvoegsel voorraad_ en staat los van de tabellen van de checklijst-app.
--- Eén tabel met documenten: 'catalog/<locatie>' (productlijst) en 'counts/<locatie>_<jaar>-W<week>' (telling).
+-- Eén tabel met documenten: 'catalog/<locatie>' (productlijst) en 'counts/<locatie>_<jaar>-W<week>' (telling),
+-- en voor de temperatuurregistratie 'temp/<plek>' (apparaten) en 'templog/<plek>_<jaar>-<maand>' (metingen).
 -- Uitvoeren in de SQL Editor. Opnieuw uitvoeren kan zonder schade.
 
 create table if not exists public.voorraad_docs (
   path       text primary key
-             check (path ~ '^(catalog|counts)/[A-Za-z0-9_.-]{1,80}$'),
+             check (path ~ '^(catalog|counts|temp|templog)/[A-Za-z0-9_.-]{1,80}$'),
   data       jsonb not null default '{}'::jsonb
              check (jsonb_typeof(data) = 'object' and octet_length(data::text) < 400000),
   updated_at timestamptz not null default now()
@@ -19,6 +20,11 @@ create table if not exists public.voorraad_docs_history (
   data     jsonb not null,
   saved_at timestamptz not null default now()
 );
+-- Bestaande database: de padcontrole verruimen voor de temperatuurdocumenten.
+alter table public.voorraad_docs drop constraint if exists voorraad_docs_path_check;
+alter table public.voorraad_docs add constraint voorraad_docs_path_check
+  check (path ~ '^(catalog|counts|temp|templog)/[A-Za-z0-9_.-]{1,80}$');
+
 create index if not exists voorraad_docs_history_path_idx on public.voorraad_docs_history (path, saved_at desc);
 
 create or replace function public.voorraad_before_write() returns trigger
@@ -136,7 +142,9 @@ language sql stable security definer set search_path = public, extensions as $$
     where s.token_hash = encode(digest(p_token, 'sha256'), 'hex') and s.expires_at > now());
 $$;
 
-create or replace function public.voorraad_lezen(p_token text, p_since timestamptz default null)
+-- p_prefixes: alleen documenten van die soorten, bv. '{temp,templog}'. Leeg = alles.
+drop function if exists public.voorraad_lezen(text, timestamptz);
+create or replace function public.voorraad_lezen(p_token text, p_since timestamptz default null, p_prefixes text[] default null)
 returns table (path text, data jsonb, updated_at timestamptz)
 language plpgsql stable security definer set search_path = public, extensions as $$
 begin
@@ -145,7 +153,8 @@ begin
   end if;
   return query
     select d.path, d.data, d.updated_at from public.voorraad_docs d
-    where p_since is null or d.updated_at > p_since;
+    where (p_since is null or d.updated_at > p_since)
+      and (p_prefixes is null or split_part(d.path, '/', 1) = any (p_prefixes));
 end $$;
 
 create or replace function public.voorraad_schrijven(p_token text, p_path text, p_data jsonb) returns jsonb
@@ -181,11 +190,11 @@ end $$;
 revoke execute on function public.voorraad_code_instellen(text) from public, anon, authenticated;
 revoke execute on function public.voorraad_sessie_ok(text) from public, anon, authenticated;
 revoke execute on function public.voorraad_login(text) from public;
-revoke execute on function public.voorraad_lezen(text, timestamptz) from public;
+revoke execute on function public.voorraad_lezen(text, timestamptz, text[]) from public;
 revoke execute on function public.voorraad_schrijven(text, text, jsonb) from public;
 revoke execute on function public.voorraad_bijwerken(text, text, jsonb) from public;
 grant execute on function public.voorraad_login(text) to anon, authenticated;
-grant execute on function public.voorraad_lezen(text, timestamptz) to anon, authenticated;
+grant execute on function public.voorraad_lezen(text, timestamptz, text[]) to anon, authenticated;
 grant execute on function public.voorraad_schrijven(text, text, jsonb) to anon, authenticated;
 grant execute on function public.voorraad_bijwerken(text, text, jsonb) to anon, authenticated;
 
