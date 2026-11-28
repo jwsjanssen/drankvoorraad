@@ -1,5 +1,5 @@
 /* Menu bovenaan elke pagina: één knop linksboven met alle onderdelen.
-   Opbouw: de drankvoorraad, en daaronder per locatie de plekken met wat er per plek is (temperaturen, checklijsten, HACCP, parkeren).
+   Opbouw: de voorraad (tellen en inkoop), en daaronder per locatie de plekken met wat er per plek is (temperaturen, checklijsten, HACCP, parkeren).
    De plekken komen uit plekken.js; de opmaak staat in menu.css. */
 (function(){
 'use strict';
@@ -7,7 +7,7 @@ var top=document.querySelector('.top'),brand=document.querySelector('.top .brand
 if(!top||!brand)return;
 var PLEKKEN=window.DV_PLEKKEN||[];
 var here=document.body.getAttribute('data-page')||'';
-var mod=document.body.getAttribute('data-module')||(here?'temp':'voorraad');   /* voorraad | temp | check | haccp | park */
+var mod=document.body.getAttribute('data-module')||(here?'temp':'voorraad');   /* voorraad | inkoop | temp | check | haccp | park */
 var base=mod==='voorraad'?'':'../';
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 
@@ -20,9 +20,11 @@ top.classList.add('has-menu');
 
 function chip(label,href,cur){return '<a class="menu-chip" href="'+href+'"'+(cur?' aria-current="page"':'')+'>'+label+'</a>'}
 var h='<div class="wrap"><nav class="menu-card" aria-label="Alle onderdelen">'
-  +'<div class="menu-group">Drankvoorraad</div>'
+  +'<div class="menu-group">Voorraad</div>'
   +'<a class="menu-link" href="'+(base||'./')+'"'+(mod==='voorraad'?' aria-current="page"':'')+'><span><b>Voorraad tellen en bestellen</b><small>FLOATS en ALTSTADT</small></span>'
-  +(mod==='voorraad'?'<span class="menu-here">Je bent hier</span>':'<span class="menu-go" aria-hidden="true">›</span>')+'</a>';
+  +(mod==='voorraad'?'<span class="menu-here">Je bent hier</span>':'<span class="menu-go" aria-hidden="true">›</span>')+'</a>'
+  +'<a class="menu-link" href="'+base+'inkoop/"'+(mod==='inkoop'?' aria-current="page"':'')+'><span><b>Inkoop uit facturen</b><small>Nieuwe producten en prijzen beoordelen</small></span>'
+  +(mod==='inkoop'?'<span class="menu-here">Je bent hier</span>':'<span class="menu-go" aria-hidden="true">›</span>')+'</a>';
 var loc='';
 PLEKKEN.forEach(function(p){
   if(p.loc!==loc){loc=p.loc;h+='<div class="menu-group">'+esc(loc)+'</div>'}

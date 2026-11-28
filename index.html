@@ -190,10 +190,13 @@ textarea.input{min-height:90px;font-size:14px;font-family:ui-monospace,Menlo,mon
 
 <header class="top">
   <div class="wrap top-in">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Drankvoorraad</span></div>
-    <div class="seg" id="locseg" role="group" aria-label="Locatie">
-      <button type="button" data-loc="floats" aria-pressed="true">FLOATS</button>
-      <button type="button" data-loc="altstadt" aria-pressed="false">ALTSTADT</button>
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Voorraad</span></div>
+    <div class="rowflex" style="gap:8px">
+      <div class="seg soft" id="deptseg" role="group" aria-label="Afdeling" hidden></div>
+      <div class="seg" id="locseg" role="group" aria-label="Locatie">
+        <button type="button" data-loc="floats" aria-pressed="true">FLOATS</button>
+        <button type="button" data-loc="altstadt" aria-pressed="false">ALTSTADT</button>
+      </div>
     </div>
   </div>
   <nav class="wrap tabs" aria-label="Onderdelen">
@@ -216,8 +219,12 @@ textarea.input{min-height:90px;font-size:14px;font-family:ui-monospace,Menlo,mon
 <script>
 (function(){
 'use strict';
-var CATS=["Tapbier","Flesbier","Alcoholvrij bier & kombucha","Fris & mixers","Water","Sappen & zuivel","Wijn wit","Wijn rosé","Wijn rood","Bubbels & dessertwijn","Gedistilleerd","Likeuren & aperitief","Koffie & thee","Siropen & bar"];
+var CATS=window.DV_CATS||["Tapbier","Flesbier","Alcoholvrij bier & kombucha","Fris & mixers","Water","Sappen & zuivel","Wijn wit","Wijn rosé","Wijn rood","Bubbels & dessertwijn","Gedistilleerd","Likeuren & aperitief","Koffie & thee","Siropen & bar"];
 var LOCS={floats:"FLOATS",altstadt:"ALTSTADT"};
+/* Afdelingen: elke afdeling heeft per locatie een eigen voorraad en eigen tellingen. Een product zonder afdeling hoort bij de bar. */
+var DEPTS=window.DV_DEPTS||[{key:"bar",label:"Bar"}];
+function deptOf(p){return (p&&p.dept)||"bar"}
+function deptLabel(k){var d=DEPTS.filter(function(x){return x.key===k})[0];return d?d.label:k}
 var VIEWS=["tellen","overzicht","bestellen","producten"];
 var COVER=1.5; // bestel-doel zonder minimum = 1,5 x gemiddeld weekverbruik
 var WEEK_MS=604800000;
@@ -252,7 +259,7 @@ var hashView=(location.hash||'').slice(1);
 var S={
   loc:LOCS[ls('loc')]?ls('loc'):'floats',
   view:VIEWS.indexOf(hashView)>=0?hashView:null,
-  week:todayWeek(), mode:'tel', filter:'all', q:'', pq:'',
+  dept:ls('dept')||'bar', week:todayWeek(), mode:'tel', filter:'all', q:'', pq:'',
   catalog:{floats:null,altstadt:null}, counts:{}, got:{floats:false,altstadt:false,counts:false},
   overlay:{}, canWrite:true, isOwner:false, uid:null, names:{},
   db:null, user:null, dl:null, failed:null, slow:false, saveState:'', showAllUse:false, sig:''
@@ -260,14 +267,24 @@ var S={
 var NOW_WEEK=S.week;
 
 /* ---------- gegevens lezen ---------- */
-function itemsOf(loc){var c=S.catalog[loc];return (c&&c.items)||{}}
+var ioCache={};
+function allItems(loc){var c=S.catalog[loc];return (c&&c.items)||{}}
+/* de producten van de gekozen afdeling */
+function itemsOf(loc){
+  var all=allItems(loc),k=ioCache[loc];
+  if(k&&k.src===all&&k.dept===S.dept)return k.out;
+  var out={};Object.keys(all).forEach(function(id){var p=all[id];if(p&&typeof p==='object'&&deptOf(p)===S.dept)out[id]=p});
+  ioCache[loc]={src:all,dept:S.dept,out:out};return out;
+}
+function deptsInUse(){var seen={bar:1};Object.keys(LOCS).forEach(function(l){var a=allItems(l);Object.keys(a).forEach(function(id){if(a[id]&&typeof a[id]==='object')seen[deptOf(a[id])]=1})});return DEPTS.filter(function(d){return seen[d.key]})}
 function prodList(loc,all){
   var it=itemsOf(loc),out=[];
-  Object.keys(it).forEach(function(id){var p=it[id];if(!p||typeof p!=='object')return;if(!all&&p.active===false)return;out.push({id:id,p:p})});
+  Object.keys(it).forEach(function(id){var p=it[id];if(!p||typeof p!=='object')return;if(!all&&(p.active===false||p.count===false))return;out.push({id:id,p:p})});
   out.sort(function(a,b){return catIdx(a.p.cat)-catIdx(b.p.cat)||String(a.p.cat).localeCompare(String(b.p.cat))||(a.p.ord||0)-(b.p.ord||0)||String(a.p.name).localeCompare(String(b.p.name))});
   return out;
 }
-function cid(loc,week){return loc+'_'+week}
+/* tellingen van de bar heten <locatie>_<week> (zoals altijd), van een andere afdeling <locatie>-<afdeling>_<week> */
+function cid(loc,week){return loc+(S.dept==='bar'?'':'-'+S.dept)+'_'+week}
 function cnt(loc,week){
   var id=cid(loc,week),b=S.counts[id],o=S.overlay[id];
   if(!b&&!o)return null;
@@ -276,7 +293,7 @@ function cnt(loc,week){
   return c;
 }
 function doneCounts(loc){
-  return Object.keys(S.counts).map(function(k){return S.counts[k]}).filter(function(c){return c&&c.loc===loc&&c.status==='done'&&c.week})
+  return Object.keys(S.counts).map(function(k){return S.counts[k]}).filter(function(c){return c&&c.loc===loc&&(c.dept||'bar')===S.dept&&c.status==='done'&&c.week})
     .sort(function(a,b){return a.week<b.week?-1:a.week>b.week?1:0});
 }
 function prevDone(loc,week){var d=doneCounts(loc),p=null;for(var i=0;i<d.length;i++){if(d[i].week<week)p=d[i];else break}return p}
@@ -285,7 +302,7 @@ function n0(v){return typeof v==='number'?v:0}
 /* per product: begin + geleverd - eind = verbruik */
 function analyse(loc,c,prev){
   var it=itemsOf(loc),ids={},rows=[],gap=prev?Math.max(1,weeksBetween(prev.week,c.week)):null;
-  Object.keys(it).forEach(function(id){if(it[id]&&it[id].active!==false)ids[id]=1});
+  Object.keys(it).forEach(function(id){if(it[id]&&it[id].active!==false&&it[id].count!==false)ids[id]=1});
   [c.qty,c.inn,prev&&prev.qty].forEach(function(m){if(m)Object.keys(m).forEach(function(id){if(n0(m[id])>0&&it[id])ids[id]=1})});
   Object.keys(ids).forEach(function(id){
     var p=it[id],end=c.qty?c.qty[id]:null;if(typeof end!=='number')end=null;
@@ -326,7 +343,9 @@ function queue(docId,patch,now){
 function ensureDoc(docId){
   if(S.counts[docId])return Promise.resolve();
   var ref=S.db.doc('counts/'+docId),parts=docId.split('_');
-  return ref.get().then(function(s){if(s.exists)return;return ref.set({loc:parts[0],week:parts[1],status:'open',startedAt:new Date().toISOString(),qty:{},inn:{}})});
+  var dash=parts[0].indexOf('-'),nd={loc:dash<0?parts[0]:parts[0].slice(0,dash),week:parts[1],status:'open',startedAt:new Date().toISOString(),qty:{},inn:{}};
+  if(dash>=0)nd.dept=parts[0].slice(dash+1);
+  return ref.get().then(function(s){if(s.exists)return;return ref.set(nd)});
 }
 function flush(docId,retry){
   var q=Q[docId];if(!q||q.busy||!q.patch)return;
@@ -371,6 +390,11 @@ function closeModal(){var m=$('#modal');m.hidden=true;m.innerHTML=''}
 function setChrome(){
   document.body.setAttribute('data-loc',S.loc);
   $all('#locseg button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.loc===S.loc?'true':'false')});
+  /* afdeling kiezen: alleen zichtbaar zodra er producten van meer dan één afdeling zijn */
+  var ds=deptsInUse(),dseg=$('#deptseg');
+  if(!ds.some(function(d){return d.key===S.dept}))S.dept='bar';
+  if(dseg){dseg.hidden=ds.length<2;var dsig=ds.map(function(d){return d.key}).join(',')+'|'+S.dept;
+    if(dseg.getAttribute('data-sig')!==dsig){dseg.setAttribute('data-sig',dsig);dseg.innerHTML=ds.map(function(d){return '<button type="button" data-dept="'+d.key+'" aria-pressed="'+(d.key===S.dept)+'">'+esc(d.label)+'</button>'}).join('')}}
   $all('.tabs a').forEach(function(a){if(a.getAttribute('href')==='#'+S.view)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
 }
 function ready(){return S.got.floats&&S.got.altstadt&&S.got.counts}
@@ -380,7 +404,7 @@ function render(soft){
   if(S.failed){v.innerHTML='<div class="empty"><h3>'+esc(S.failed.t)+'</h3><p>'+esc(S.failed.m)+'</p></div>';return}
   if(!ready()){v.innerHTML='<div class="empty"><h3>Voorraad laden…</h3><p>'+(S.slow?'De gegevens zijn nog niet bereikbaar. Controleer je internetverbinding; zodra er verbinding is verschijnt de voorraad vanzelf.':'De productlijst en de tellingen van FLOATS en ALTSTADT worden opgehaald.')+'</p></div>';return}
   if(S.view==='tellen'){
-    var c=cnt(S.loc,S.week),sig=[S.loc,S.week,S.mode,!!(c&&c.status==='done'),S.canWrite,catSig(S.loc),S.filter].join('|');
+    var c=cnt(S.loc,S.week),sig=[S.loc,S.dept,S.week,S.mode,!!(c&&c.status==='done'),S.canWrite,catSig(S.loc),S.filter].join('|');
     if(soft&&sig===S.sig&&$('#list')){patchTellen();return}
     S.sig=sig;renderTellen();return;
   }
@@ -388,7 +412,7 @@ function render(soft){
   if(soft&&v.contains(document.activeElement)&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)&&S.view==='producten'){renderProdList();return}
   if(S.view==='overzicht')renderOverzicht();else if(S.view==='bestellen')renderBestellen();else renderProducten();
 }
-function catSig(loc){var it=itemsOf(loc);return Object.keys(it).map(function(k){var p=it[k];return k+(p.active===false?'0':'1')+p.name+p.unit+p.cat+p.pack}).join(',').length+':'+Object.keys(it).length+':'+JSON.stringify(it).length}
+function catSig(loc){var it=itemsOf(loc);return Object.keys(it).map(function(k){var p=it[k];return k+(p.active===false?'0':'1')+(p.count===false?'x':'')+p.name+p.unit+p.cat+p.pack}).join(',').length+':'+Object.keys(it).length+':'+JSON.stringify(it).length}
 
 /* ---------- TELLEN ---------- */
 function statusPill(c){
@@ -424,7 +448,7 @@ function renderTellen(){
   var loc=S.loc,c=cnt(loc,S.week),prev=prevDone(loc,S.week),done=c&&c.status==='done',ro=!S.canWrite||done;
   var list=prodList(loc),rows=tellenRows(),h='';
   h+='<section class="stack"><div class="weekbar"><button class="iconbtn" id="wkprev" aria-label="Vorige week">‹</button>'
-    +'<div class="wk"><b>Week '+weekNo(S.week)+' · '+esc(LOCS[loc])+'</b><span class="muted">'+esc(weekRange(S.week))+(S.week===NOW_WEEK?' · deze week':'')+'</span></div>'
+    +'<div class="wk"><b>Week '+weekNo(S.week)+' · '+esc(LOCS[loc])+(deptsInUse().length>1?' · '+esc(deptLabel(S.dept)):'')+'</b><span class="muted">'+esc(weekRange(S.week))+(S.week===NOW_WEEK?' · deze week':'')+'</span></div>'
     +'<button class="iconbtn" id="wknext" aria-label="Volgende week"'+(S.week>=NOW_WEEK?' disabled':'')+'>›</button></div>'
     +'<div class="rowflex"><span id="stpill">'+statusPill(c)+'</span><span class="muted" style="font-size:13px">'+(prev?'Verbruik wordt berekend t.o.v. week '+weekNo(prev.week)+'.':'Eerste telling: dit wordt de beginvoorraad.')+'</span></div>';
   if(!S.canWrite)h+='<div class="note warn">Je kunt nu alleen meekijken: opslaan is op dit moment niet toegestaan. Meld dit bij de eigenaar.</div>';
@@ -700,7 +724,7 @@ function renderBestellen(){
 /* ---------- PRODUCTEN ---------- */
 function renderProducten(){
   var loc=S.loc,all=prodList(loc,true),act=all.filter(function(x){return x.p.active!==false}).length;
-  var h='<section class="stack"><div class="spread"><div><h2>Producten '+esc(LOCS[loc])+'</h2><span class="muted">'+act+' actief'+(all.length>act?' · '+(all.length-act)+' niet actief':'')+'</span></div>'+(S.canWrite?'<button class="btn primary" id="addprod">Product toevoegen</button>':'')+'</div>'
+  var h='<section class="stack"><div class="spread"><div><h2>Producten '+esc(LOCS[loc])+(deptsInUse().length>1?' · '+esc(deptLabel(S.dept)):'')+'</h2><span class="muted">'+act+' actief'+(all.length>act?' · '+(all.length-act)+' niet actief':'')+'</span></div>'+(S.canWrite?'<button class="btn primary" id="addprod">Product toevoegen</button>':'')+'</div>'
     +'<input class="input" id="pq" type="search" placeholder="Zoek product of leverancier" value="'+esc(S.pq)+'" aria-label="Zoek product"><div id="plist"></div></section>';
   $('#view').innerHTML=h;renderProdList();
 }
@@ -711,11 +735,11 @@ function renderProdList(){
   var h='',cur=null;
   all.forEach(function(x){var p=x.p;
     if(p.cat!==cur){if(cur!==null)h+='</div>';cur=p.cat;h+='<div class="cat-head"><h3>'+esc(cur)+'</h3></div><div class="rows">'}
-    h+='<button type="button" class="prow'+(p.active===false?' off':'')+'" data-edit="'+esc(x.id)+'"'+(S.canWrite?'':' disabled')+'><span class="row-main"><span class="row-name" style="display:block">'+esc(p.name)+(p.active===false?' <span class="pill">niet actief</span>':'')+'</span><span class="row-sub">'+esc(p.unit)+' · '+(typeof p.price==='number'?eur(p.price)+(p.est?' (schatting)':''):'<span class="pill warn">prijs ontbreekt</span>')+(typeof p.par==='number'?' · minimum '+num(p.par):'')+(typeof p.tare==='number'?' · leeg '+num(p.tare)+' kg':'')+(p.pack>1?' · '+esc(p.packName||'verpakking')+' van '+p.pack:'')+(p.sup?' · '+esc(p.sup):'')+'</span></span><span class="chev" aria-hidden="true">›</span></button>'});
+    h+='<button type="button" class="prow'+(p.active===false?' off':'')+'" data-edit="'+esc(x.id)+'"'+(S.canWrite?'':' disabled')+'><span class="row-main"><span class="row-name" style="display:block">'+esc(p.name)+(p.active===false?' <span class="pill">niet actief</span>':'')+(p.count===false?' <span class="pill">telt niet mee</span>':'')+'</span><span class="row-sub">'+esc(p.unit)+' · '+(typeof p.price==='number'?eur(p.price)+(p.est?' (schatting)':''):'<span class="pill warn">prijs ontbreekt</span>')+(typeof p.par==='number'?' · minimum '+num(p.par):'')+(typeof p.tare==='number'?' · leeg '+num(p.tare)+' kg':'')+(p.pack>1?' · '+esc(p.packName||'verpakking')+' van '+p.pack:'')+(p.sup?' · '+esc(p.sup):'')+'</span></span><span class="chev" aria-hidden="true">›</span></button>'});
   el.innerHTML=h+'</div>';
 }
 function openProduct(pid){
-  var loc=S.loc,p=pid?itemsOf(loc)[pid]:{cat:CATS[0],pack:1,active:true},cats=CATS.slice();
+  var loc=S.loc,p=pid?itemsOf(loc)[pid]:{cat:CATS[0],pack:1,active:true,dept:S.dept},cats=CATS.slice();
   prodList(loc,true).forEach(function(x){if(cats.indexOf(x.p.cat)<0)cats.push(x.p.cat)});
   function f(id,label,val,extra,small){return '<div class="field"><label for="'+id+'">'+label+'</label><input class="input" id="'+id+'" value="'+esc(val==null?'':val)+'" '+(extra||'')+'>'+(small?'<small>'+small+'</small>':'')+'</div>'}
   var h='<h2>'+(pid?'Product bewerken':'Product toevoegen')+'</h2><p class="muted" style="margin:0">'+esc(LOCS[loc])+'</p>'
@@ -727,6 +751,8 @@ function openProduct(pid){
     +'<div class="grid2">'+f('p-pack','Aantal per bestel-eenheid',p.pack||1,'inputmode="numeric"','bv. 24 flesjes per krat.')+f('p-packname','Naam bestel-eenheid',p.packName,'placeholder="krat, doos, fust, fles"')+'</div>'
     +'<div class="grid2">'+f('p-sup','Leverancier',p.sup,'placeholder="bv. Sligro"')+f('p-art','Artikelnummer (optioneel)',p.art)+'</div>'
     +'<div class="grid2">'+f('p-tare','Leeggewicht in kg (optioneel)',typeof p.tare==='number'?inStr(p.tare):'','inputmode="decimal" placeholder="bv. gewicht van een leeg fust"','Vul dit in om het product te kunnen wegen bij het tellen.')+f('p-vol','Inhoud in liter (optioneel)',typeof p.vol==='number'?inStr(p.vol):'','inputmode="decimal" placeholder="'+(pid&&volOf(p)!=null?inStr(volOf(p)):'bv. 20')+'"','Leeg = afgeleid uit de tel-eenheid.')+'</div>'
+    +'<div class="field"><label for="p-dept">Afdeling</label><select class="input" id="p-dept">'+DEPTS.map(function(d){return '<option value="'+d.key+'"'+(d.key===deptOf(p)?' selected':'')+'>'+esc(d.label)+'</option>'}).join('')+'</select><small>Elke afdeling heeft een eigen tellijst.</small></div>'
+    +'<label class="rowflex"><input type="checkbox" id="p-count"'+(p.count===false?'':' checked')+' style="width:20px;height:20px"> <span>Meetellen in de voorraadtelling</span></label>'
     +'<label class="rowflex"><input type="checkbox" id="p-active"'+(p.active===false?'':' checked')+' style="width:20px;height:20px"> <span>Actief: staat op de tellijst</span></label>'
     +'<div class="note bad" id="p-err" hidden></div>'
     +'<div class="spread"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="p-save" data-pid="'+esc(pid||'')+'">Opslaan</button></div>';
@@ -743,7 +769,7 @@ function doSaveProduct(){
   if(par===undefined)return bad('De minimumvoorraad is geen geldig getal.');
   if(pack===undefined||pack===null||pack<1)pack=1;
   var p={name:name.slice(0,80),cat:$('#p-cat').value,unit:unit.slice(0,40),price:price,par:par,pack:Math.round(pack),packName:$('#p-packname').value.trim().slice(0,20)||(pack>1?'verpakking':'stuk'),
-    tare:tare,vol:vol,sup:$('#p-sup').value.trim().slice(0,40),art:$('#p-art').value.trim().slice(0,30),active:$('#p-active').checked,
+    tare:tare,vol:vol,sup:$('#p-sup').value.trim().slice(0,40),art:$('#p-art').value.trim().slice(0,30),active:$('#p-active').checked,dept:$('#p-dept').value,count:$('#p-count').checked,
     ord:old&&typeof old.ord==='number'?old.ord:Date.now()%1e9,est:old&&old.est&&old.price===price?true:false};
   if(!pid)pid=loc.charAt(0)+'-'+(slug(name+' '+unit)||'product').slice(0,60)+'-'+Math.random().toString(36).slice(2,6);
   var b=$('#p-save');b.disabled=true;b.textContent='Opslaan…';
@@ -759,6 +785,7 @@ function copyText(txt,btn){
 document.addEventListener('click',function(e){
   var t=e.target,b;
   if((b=t.closest('a[href^="#"]'))){var hv=b.getAttribute('href').slice(1);if(VIEWS.indexOf(hv)>=0){e.preventDefault();if(hv!==S.view){S.view=hv;render();window.scrollTo(0,0)}try{if(location.hash!=='#'+hv)location.hash=hv}catch(x){}return}}
+  if((b=t.closest('#deptseg button'))){S.dept=b.dataset.dept;ls('dept',S.dept);S.q='';S.pq='';S.filter='all';render();return}
   if((b=t.closest('#locseg button,.loccard'))){S.loc=b.dataset.loc;ls('loc',S.loc);S.q='';S.pq='';S.filter='all';render();return}
   if(t.closest('[data-close]')||t.id==='modal'){closeModal();return}
   if((b=t.closest('[data-copy]'))){var ta=$(b.dataset.copy);copyText(ta.value);return}

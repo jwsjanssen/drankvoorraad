@@ -5,11 +5,12 @@
 -- en voor de checklijsten 'check/<plek>' (lijsten en taken) en 'checklog/<plek>_<periode>' (wat is afgetekend).
 -- en voor de HACCP-registraties 'haccp/<plek>' (instellingen en normen) en 'haccplog/<plek>_<jaar>-<maand>' (registraties).
 -- en voor het parkeren 'park/<plek>' (plekken) en 'parklog/<plek>_<jaar>-<maand>' (verhuringen) en 'parklog/<plek>_kb-<jaar>' (kamerborg).
+-- en voor de inkoop uit facturen 'inkoop/<locatie>' (wat geen voorraad is) en 'inkooplog/<locatie>_<jaar>-W<week>' (factuurregels).
 -- Uitvoeren in de SQL Editor. Opnieuw uitvoeren kan zonder schade.
 
 create table if not exists public.voorraad_docs (
   path       text primary key
-             check (path ~ '^(catalog|counts|temp|templog|check|checklog|haccp|haccplog|park|parklog)/[A-Za-z0-9_.-]{1,80}$'),
+             check (path ~ '^(catalog|counts|temp|templog|check|checklog|haccp|haccplog|park|parklog|inkoop|inkooplog)/[A-Za-z0-9_.-]{1,80}$'),
   data       jsonb not null default '{}'::jsonb
              check (jsonb_typeof(data) = 'object' and octet_length(data::text) < 400000),
   updated_at timestamptz not null default now()
@@ -26,7 +27,7 @@ create table if not exists public.voorraad_docs_history (
 -- Bestaande database: de padcontrole verruimen voor de temperatuurdocumenten.
 alter table public.voorraad_docs drop constraint if exists voorraad_docs_path_check;
 alter table public.voorraad_docs add constraint voorraad_docs_path_check
-  check (path ~ '^(catalog|counts|temp|templog|check|checklog|haccp|haccplog|park|parklog)/[A-Za-z0-9_.-]{1,80}$');
+  check (path ~ '^(catalog|counts|temp|templog|check|checklog|haccp|haccplog|park|parklog|inkoop|inkooplog)/[A-Za-z0-9_.-]{1,80}$');
 
 create index if not exists voorraad_docs_history_path_idx on public.voorraad_docs_history (path, saved_at desc);
 
@@ -200,6 +201,89 @@ grant execute on function public.voorraad_login(text) to anon, authenticated;
 grant execute on function public.voorraad_lezen(text, timestamptz, text[]) to anon, authenticated;
 grant execute on function public.voorraad_schrijven(text, text, jsonb) to anon, authenticated;
 grant execute on function public.voorraad_bijwerken(text, text, jsonb) to anon, authenticated;
+
+-- Inkoop uit facturen. De dagelijkse ronde (op de computer van de eigenaar) leest de facturen uit de mail
+-- en levert de regels hier aan met een eigen sleutel. Die sleutel mag alleen: nieuwe facturen toevoegen aan
+-- 'inkooplog/...' en opvragen welke producten en facturen al bekend zijn. Niets wijzigen, niets anders lezen.
+-- Alleen de hash van de sleutel staat in de database. Instellen (in de SQL Editor):
+--   select public.voorraad_inkoopsleutel_instellen('<sha256 van de sleutel, 64 tekens>');
+create table if not exists public.voorraad_inkoopsleutel (
+  id         int primary key default 1 check (id = 1),
+  key_hash   text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.voorraad_inkoopsleutel enable row level security;
+revoke all on public.voorraad_inkoopsleutel from public, anon, authenticated;
+
+create or replace function public.voorraad_inkoopsleutel_instellen(p_hash text) returns void
+language plpgsql set search_path = public, extensions as $$
+begin
+  if p_hash is null or p_hash !~ '^[0-9a-f]{64}$' then
+    raise exception 'geef de sha256-hash van de sleutel (64 tekens, kleine letters en cijfers)';
+  end if;
+  insert into public.voorraad_inkoopsleutel (id, key_hash) values (1, p_hash)
+  on conflict (id) do update set key_hash = excluded.key_hash, updated_at = now();
+end $$;
+
+create or replace function public.voorraad_inkoop_ok(p_sleutel text) returns boolean
+language sql stable security definer set search_path = public, extensions as $$
+  select p_sleutel is not null and length(p_sleutel) between 40 and 128 and exists (
+    select 1 from public.voorraad_inkoopsleutel k
+    where k.id = 1 and k.key_hash = encode(digest(p_sleutel, 'sha256'), 'hex'));
+$$;
+
+-- Eén factuur toevoegen. Bestaat het factuurnummer al (in welke week of locatie ook), dan gebeurt er niets.
+create or replace function public.voorraad_inkoop_aanleveren(p_sleutel text, p_path text, p_fid text, p_doc jsonb) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if not public.voorraad_inkoop_ok(p_sleutel) then
+    raise exception 'geen toegang' using errcode = '28000';
+  end if;
+  if p_path !~ '^inkooplog/(floats|altstadt|onbekend)_[0-9]{4}-W[0-9]{2}$' then
+    raise exception 'ongeldig pad %', p_path;
+  end if;
+  if p_fid is null or p_fid !~ '^[a-z0-9_-]{3,90}$' or jsonb_typeof(p_doc) <> 'object' or octet_length(p_doc::text) > 150000 then
+    raise exception 'ongeldige factuur';
+  end if;
+  if exists (select 1 from public.voorraad_docs d where d.path like 'inkooplog/%' and d.data -> 'f' ? p_fid) then
+    return jsonb_build_object('status', 'bestaat');
+  end if;
+  insert into public.voorraad_docs as d (path, data)
+  values (p_path, jsonb_build_object('f', jsonb_build_object(p_fid, p_doc)))
+  on conflict (path) do update
+    set data = public.voorraad_deep_merge(d.data, jsonb_build_object('f', jsonb_build_object(p_fid, p_doc)));
+  return jsonb_build_object('status', 'toegevoegd');
+end $$;
+
+-- Wat is al bekend: per locatie de producten (naam, leverancier, artikelnummer, koppelingen), wat is
+-- gemarkeerd als geen voorraad, en de nummers van de facturen die al zijn aangeleverd.
+create or replace function public.voorraad_inkoop_bekend(p_sleutel text) returns jsonb
+language plpgsql stable security definer set search_path = public, extensions as $$
+declare r jsonb;
+begin
+  if not public.voorraad_inkoop_ok(p_sleutel) then
+    raise exception 'geen toegang' using errcode = '28000';
+  end if;
+  select jsonb_build_object(
+    'producten', coalesce((select jsonb_object_agg(split_part(d.path, '/', 2),
+        (select coalesce(jsonb_object_agg(e.key, jsonb_build_object('n', e.value -> 'name', 's', e.value -> 'sup', 'a', e.value -> 'art', 'r', e.value -> 'refs')), '{}'::jsonb)
+           from jsonb_each(case when jsonb_typeof(d.data -> 'items') = 'object' then d.data -> 'items' else '{}'::jsonb end) e))
+      from public.voorraad_docs d where d.path like 'catalog/%'), '{}'::jsonb),
+    'geenvoorraad', coalesce((select jsonb_object_agg(split_part(d.path, '/', 2), coalesce(d.data -> 'skip', '{}'::jsonb))
+      from public.voorraad_docs d where d.path like 'inkoop/%'), '{}'::jsonb),
+    'facturen', coalesce((select jsonb_agg(k) from public.voorraad_docs d,
+        lateral jsonb_object_keys(case when jsonb_typeof(d.data -> 'f') = 'object' then d.data -> 'f' else '{}'::jsonb end) k
+      where d.path like 'inkooplog/%'), '[]'::jsonb)
+  ) into r;
+  return r;
+end $$;
+
+revoke execute on function public.voorraad_inkoopsleutel_instellen(text) from public, anon, authenticated;
+revoke execute on function public.voorraad_inkoop_ok(text) from public, anon, authenticated;
+revoke execute on function public.voorraad_inkoop_aanleveren(text, text, text, jsonb) from public;
+revoke execute on function public.voorraad_inkoop_bekend(text) from public;
+grant execute on function public.voorraad_inkoop_aanleveren(text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.voorraad_inkoop_bekend(text) to anon, authenticated;
 
 -- Rechtstreekse toegang tot de tabel dicht: alles loopt via de functies met sessiesleutel.
 drop policy if exists "voorraad lezen" on public.voorraad_docs;
