@@ -221,3 +221,53 @@ a.pmain{padding:10px 0}
 .hgrid thead th span{display:inline-block;padding:4px 2px;font-weight:600}
 .hgrid thead th.today span{background:var(--accent);color:var(--on-accent);border-radius:5px;padding:4px 6px}
 .hgrid td.bad{background:var(--bad-bg);color:var(--bad);font-weight:700}
+
+/* ---------- parkeren ---------- */
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.tcount{display:inline-block;min-width:20px;padding:1px 6px;margin-left:4px;border-radius:99px;font-size:12px;font-weight:700;text-align:center;background:var(--warn-bg);color:var(--warn)}
+.tcount.bad{background:var(--bad);color:var(--surface)}
+a.plink{text-decoration:none;color:inherit}
+a.plink .btn{flex:none;color:var(--ink);display:inline-flex;align-items:center}
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px}
+.calhead,.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.calhead span{text-align:center;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:2px 0 6px}
+.cday{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:54px;padding:4px 0;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink)}
+.cnum2{font-size:12px;font-weight:600;color:var(--muted);line-height:1}
+.ccount{font-size:14.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.cday.l1{background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.cday.l2{background:color-mix(in srgb,var(--accent) 30%,var(--surface))}
+.cday.l3{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cday.l3 .cnum2{color:inherit;opacity:.85}
+.cday.past{opacity:.72}
+.cday.today{box-shadow:0 0 0 2px var(--ink)}
+.cday.sel{outline:3px solid var(--accent);outline-offset:2px;opacity:1}
+.cdot{position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 2px var(--surface)}
+.cdot.bad{background:var(--bad)}
+.callegend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px}
+.callegend span{display:inline-flex;align-items:center;gap:5px}
+.lg{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--line);background:var(--surface)}
+.lg.l1{background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.lg.l2{background:color-mix(in srgb,var(--accent) 30%,var(--surface))}
+.lg.l3{background:var(--accent);border-color:var(--accent)}
+.pspot{display:flex;align-items:stretch}
+.pnr{flex:none;width:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-right:1px solid var(--line);background:var(--surface-2);padding:8px 4px}
+.pspots li:first-child .pnr{border-top-left-radius:var(--r)}
+.pspots li:last-child .pnr{border-bottom-left-radius:var(--r)}
+.pnr b{font-family:var(--font-display);font-size:19px;line-height:1.1;font-variant-numeric:tabular-nums}
+.pnr span{font-size:11.5px;font-weight:600;color:var(--muted)}
+.pbody{flex:1;min-width:0;display:flex;flex-direction:column}
+.pline{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;padding:10px 12px;min-height:56px;text-align:left}
+.pline + .pline{border-top:1px dashed var(--line)}
+.pline .pill{flex:none}
+.pline.free .btn{flex:none;white-space:nowrap}
+.pvrij{color:var(--good)}
+.ptag{align-self:flex-start;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface-2);border-radius:4px;padding:1px 6px}
+.ptag.in{color:var(--on-accent);background:var(--accent)}
+.pchecks{display:flex;flex-direction:column;gap:2px;background:var(--surface-2);border-radius:var(--r);padding:6px 12px}
+.pchk{align-items:flex-start;padding:6px 0;font-weight:600}
+.pchk input{margin-top:1px;flex:none}
+.pchk small{display:block;font-weight:500;color:var(--muted);font-size:12.5px}
+table.plist{width:100%;border-collapse:collapse;font-size:14px}
+.plist th,.plist td{text-align:left;padding:9px 10px;border-top:1px solid var(--line);white-space:nowrap}
+.plist thead th{border-top:0;font-size:12px;color:var(--muted);font-weight:600}
+.plist .miss{color:var(--bad);font-weight:700}

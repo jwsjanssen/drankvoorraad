@@ -1,5 +1,5 @@
 /* Menu bovenaan elke pagina: één knop linksboven met alle onderdelen.
-   Opbouw: de drankvoorraad, en daaronder per locatie de plekken met wat er per plek is (temperaturen, checklijsten, HACCP).
+   Opbouw: de drankvoorraad, en daaronder per locatie de plekken met wat er per plek is (temperaturen, checklijsten, HACCP, parkeren).
    De plekken komen uit plekken.js; de opmaak staat in menu.css. */
 (function(){
 'use strict';
@@ -7,7 +7,7 @@ var top=document.querySelector('.top'),brand=document.querySelector('.top .brand
 if(!top||!brand)return;
 var PLEKKEN=window.DV_PLEKKEN||[];
 var here=document.body.getAttribute('data-page')||'';
-var mod=document.body.getAttribute('data-module')||(here?'temp':'voorraad');   /* voorraad | temp | check | haccp */
+var mod=document.body.getAttribute('data-module')||(here?'temp':'voorraad');   /* voorraad | temp | check | haccp | park */
 var base=mod==='voorraad'?'':'../';
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 
@@ -31,6 +31,7 @@ PLEKKEN.forEach(function(p){
     +(p.temp?chip('Temperaturen',base+p.key+'/',cur&&mod==='temp'):'')
     +chip('Checklijsten',base+'checklijst/?p='+p.key,cur&&mod==='check')
     +(p.haccp?chip('HACCP',base+'haccp/?p='+p.key,cur&&mod==='haccp'):'')
+    +(p.park?chip('Parkeren',base+'parkeren/?p='+p.key,cur&&mod==='park'):'')
     +'</span></div>';
 });
 h+='</nav></div>';
