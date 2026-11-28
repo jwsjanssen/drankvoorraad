@@ -206,10 +206,13 @@ function setChrome(){
   $all('.tabs a').forEach(function(a){if(a.getAttribute('href')==='#'+S.view)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
 }
 function ready(){return S.logsOk&&S.catOk.floats&&S.catOk.altstadt}
-function render(){
+/* soft = bijwerken omdat er nieuwe gegevens binnenkwamen: dan niet opnieuw tekenen terwijl iemand typt.
+   Na een tik van de gebruiker altijd tekenen (op iPhone houdt het naamveld de focus als je op een knop tikt). */
+function render(soft){
   if(!ready())return;
   var ae=document.activeElement;
-  if(ae&&$('#view').contains(ae)&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+  if(soft&&ae&&$('#view').contains(ae)&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+  var nm=$('#naam');if(nm)ls('naam',nm.value.trim());
   setChrome();
   var y=window.scrollY;
   $('#view').innerHTML=S.view==='verwerkt'?viewDone():S.view==='overig'?viewOther():viewReview();
@@ -246,7 +249,10 @@ function invCard(inv,ro){
   var t=tally(inv),open=S.open===inv.fid,v=inv.v,h,extra;
   if(ro){var np=prodLines(inv).length;extra=np+' product'+(np===1?'':'en')+(v.by?' · verwerkt door '+esc(v.by):'')+(v.at?' op '+dateLabel(v.at):'')}
   else extra=[t.neu?'<b class="iwarn">'+t.neu+' nieuw</b>':'',t.link?t.link+' bekend':'',t.skip?t.skip+' geen voorraad':'',t.odd?'<b class="ibad">'+t.odd+' prijs controleren</b>':''].filter(Boolean).join(' · ')||'geen productregels';
-  h='<section class="inv'+(open?' open':'')+'"><button type="button" class="ihead" data-open="'+esc(inv.fid)+'" aria-expanded="'+open+'"><span class="chev" aria-hidden="true">›</span>'+invHead(inv,extra)+'</button>';
+  /* snel goedkeuren zonder de factuur te openen; niet als er een prijs is die eerst bekeken moet worden */
+  var quick=!ro&&!open&&inv.loc!=='onbekend'&&!t.odd&&(t.neu+t.link+t.skip)>0;
+  h='<section class="inv'+(open?' open':'')+'"><div class="irow"><button type="button" class="ihead" data-open="'+esc(inv.fid)+'" aria-expanded="'+open+'"><span class="chev" aria-hidden="true">›</span>'+invHead(inv,extra)+'</button>'
+    +(quick?'<button type="button" class="btn iquick" data-approve="'+esc(inv.fid)+'"'+(S.busy?' disabled':'')+' aria-label="Factuur '+esc((v.sup||'')+' '+(v.no||''))+' goedkeuren">Goedkeuren</button>':'')+'</div>';
   if(open){
     h+='<div class="ibody">';
     if(v.note)h+='<p class="inote muted">'+esc(v.note)+'</p>';
@@ -272,7 +278,7 @@ function viewReview(){
   else{
     h+='<details class="help card"><summary>Zo werkt het</summary><ol><li><b>Open een factuur.</b> Bij elke regel staat wat ermee gebeurt: bekend product (de prijs wordt bijgewerkt), nieuw product, of geen voorraad.</li>'
       +'<li><b>Tik op een regel om het aan te passen:</b> naam, afdeling, categorie, tel-eenheid, of koppel hem aan een product dat al bestaat.</li>'
-      +'<li><b>Goedkeuren.</b> Pas dan komen de producten en prijzen in de productlijst. De volgende keer wordt dezelfde regel vanzelf herkend.</li></ol></details>';
+      +'<li><b>Goedkeuren.</b> Pas dan komen de producten en prijzen in de productlijst. De volgende keer wordt dezelfde regel vanzelf herkend. Weet je het zeker, dan kun je ook meteen op Goedkeuren naast de factuur drukken, zonder hem te openen.</li></ol></details>';
     var e=easy(S.loc);
     if(e.length)h+='<div class="note good spread"><span>'+e.length+' factu'+(e.length===1?'ur bevat':'ren bevatten')+' alleen bekende producten.</span><button class="btn" id="easy"'+(S.busy?' disabled':'')+'>In één keer verwerken</button></div>';
   }
@@ -396,14 +402,14 @@ window.claude.use('db').then(function(db){
   S.db=db;
   if(!db){fail('De website is niet goed geladen','Laad de pagina opnieuw. Blijft dit terugkomen, meld het bij de eigenaar.');return}
   ['floats','altstadt'].forEach(function(loc){
-    db.doc('catalog/'+loc).onSnapshot(function(s){S.cat[loc]=s.exists?s.data():{items:{}};S.catOk[loc]=true;render()});
-    db.doc('inkoop/'+loc).onSnapshot(function(s){S.cfg[loc]=s.exists?s.data():null;render()});
+    db.doc('catalog/'+loc).onSnapshot(function(s){S.cat[loc]=s.exists?s.data():{items:{}};S.catOk[loc]=true;render(true)});
+    db.doc('inkoop/'+loc).onSnapshot(function(s){S.cfg[loc]=s.exists?s.data():null;render(true)});
   });
   db.collection('inkooplog').limit(1000).onSnapshot(function(qs){
     var o={};qs.docs.forEach(function(d){o[d.id]=d.data()});
     S.logs=o;S.logsOk=true;
     if(!pending(S.loc).length&&S.view==='beoordelen'){var alt=['floats','altstadt','onbekend'].filter(function(l){return pending(l).length})[0];if(alt&&!S.switched){S.loc=alt}}
-    S.switched=true;render();
+    S.switched=true;render(true);
   });
 });
 })();
