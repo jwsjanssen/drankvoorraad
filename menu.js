@@ -1,19 +1,15 @@
-/* Menu bovenaan elke pagina: één knop linksboven met alle onderdelen (drankvoorraad en de vier temperatuurpagina's).
-   Wordt op elke pagina geladen; de opmaak staat in menu.css. */
+/* Menu bovenaan elke pagina: één knop linksboven met alle onderdelen.
+   Opbouw: de drankvoorraad, en daaronder per locatie de plekken met wat er per plek is (temperaturen, checklijsten).
+   De plekken komen uit plekken.js; de opmaak staat in menu.css. */
 (function(){
 'use strict';
 var top=document.querySelector('.top'),brand=document.querySelector('.top .brand');
 if(!top||!brand)return;
-var here=document.body.getAttribute('data-page')||'',base=here?'../':'';
-var ITEMS=[
-  {group:'Drankvoorraad'},
-  {key:'',href:base||'./',label:'Voorraad tellen en bestellen',sub:'FLOATS en ALTSTADT'},
-  {group:'Temperaturen'},
-  {key:'floats-keuken',href:base+'floats-keuken/',label:'FLOATS keuken',sub:'Koelingen en vriezers'},
-  {key:'floats-bar',href:base+'floats-bar/',label:'FLOATS bar',sub:'Koelingen'},
-  {key:'altstadt-keuken',href:base+'altstadt-keuken/',label:'ALTSTADT keuken',sub:'Koelingen en vriezers'},
-  {key:'altstadt-bar',href:base+'altstadt-bar/',label:'ALTSTADT bar',sub:'Koelingen'}
-];
+var PLEKKEN=window.DV_PLEKKEN||[];
+var here=document.body.getAttribute('data-page')||'';
+var mod=document.body.getAttribute('data-module')||(here?'temp':'voorraad');   /* voorraad | temp | check */
+var base=mod==='voorraad'?'':'../';
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 
 var btn=document.createElement('button');
 btn.type='button';btn.id='menu-btn';btn.className='menu-btn';
@@ -22,12 +18,19 @@ btn.innerHTML='<span class="menu-ico" aria-hidden="true"><i></i><i></i><i></i></
 brand.insertBefore(btn,brand.firstChild);
 top.classList.add('has-menu');
 
-var h='<div class="wrap"><nav class="menu-card" aria-label="Alle onderdelen">';
-ITEMS.forEach(function(it){
-  if(it.group){h+='<div class="menu-group">'+it.group+'</div>';return}
-  var cur=it.key===here;
-  h+='<a class="menu-link" href="'+it.href+'"'+(cur?' aria-current="page"':'')+'><span><b>'+it.label+'</b><small>'+it.sub+'</small></span>'
-    +(cur?'<span class="menu-here">Je bent hier</span>':'<span class="menu-go" aria-hidden="true">›</span>')+'</a>';
+function chip(label,href,cur){return '<a class="menu-chip" href="'+href+'"'+(cur?' aria-current="page"':'')+'>'+label+'</a>'}
+var h='<div class="wrap"><nav class="menu-card" aria-label="Alle onderdelen">'
+  +'<div class="menu-group">Drankvoorraad</div>'
+  +'<a class="menu-link" href="'+(base||'./')+'"'+(mod==='voorraad'?' aria-current="page"':'')+'><span><b>Voorraad tellen en bestellen</b><small>FLOATS en ALTSTADT</small></span>'
+  +(mod==='voorraad'?'<span class="menu-here">Je bent hier</span>':'<span class="menu-go" aria-hidden="true">›</span>')+'</a>';
+var loc='';
+PLEKKEN.forEach(function(p){
+  if(p.loc!==loc){loc=p.loc;h+='<div class="menu-group">'+esc(loc)+'</div>'}
+  var cur=p.key===here;
+  h+='<div class="menu-plek'+(cur?' cur':'')+'"><b>'+esc(p.area)+'</b><span class="menu-chips">'
+    +(p.temp?chip('Temperaturen',base+p.key+'/',cur&&mod==='temp'):'')
+    +chip('Checklijsten',base+'checklijst/?p='+p.key,cur&&mod==='check')
+    +'</span></div>';
 });
 h+='</nav></div>';
 var panel=document.createElement('div');
@@ -42,6 +45,7 @@ panel.addEventListener('click',function(ev){
   var a=ev.target.closest('a');
   /* buiten de kaart getikt, of op de pagina waar je al bent: alleen sluiten */
   if(!a){if(!ev.target.closest('.menu-card'))close();return}
+  ev.stopPropagation();
   if(a.getAttribute('aria-current')==='page'){ev.preventDefault();close(true)}
 });
 document.addEventListener('click',function(ev){if(isOpen()&&!ev.target.closest('.top'))close()});
