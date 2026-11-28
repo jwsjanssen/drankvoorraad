@@ -3,11 +3,12 @@
 -- Eén tabel met documenten: 'catalog/<locatie>' (productlijst) en 'counts/<locatie>_<jaar>-W<week>' (telling),
 -- en voor de temperatuurregistratie 'temp/<plek>' (apparaten) en 'templog/<plek>_<jaar>-<maand>' (metingen).
 -- en voor de checklijsten 'check/<plek>' (lijsten en taken) en 'checklog/<plek>_<periode>' (wat is afgetekend).
+-- en voor de HACCP-registraties 'haccp/<plek>' (instellingen en normen) en 'haccplog/<plek>_<jaar>-<maand>' (registraties).
 -- Uitvoeren in de SQL Editor. Opnieuw uitvoeren kan zonder schade.
 
 create table if not exists public.voorraad_docs (
   path       text primary key
-             check (path ~ '^(catalog|counts|temp|templog|check|checklog)/[A-Za-z0-9_.-]{1,80}$'),
+             check (path ~ '^(catalog|counts|temp|templog|check|checklog|haccp|haccplog)/[A-Za-z0-9_.-]{1,80}$'),
   data       jsonb not null default '{}'::jsonb
              check (jsonb_typeof(data) = 'object' and octet_length(data::text) < 400000),
   updated_at timestamptz not null default now()
@@ -24,7 +25,7 @@ create table if not exists public.voorraad_docs_history (
 -- Bestaande database: de padcontrole verruimen voor de temperatuurdocumenten.
 alter table public.voorraad_docs drop constraint if exists voorraad_docs_path_check;
 alter table public.voorraad_docs add constraint voorraad_docs_path_check
-  check (path ~ '^(catalog|counts|temp|templog|check|checklog)/[A-Za-z0-9_.-]{1,80}$');
+  check (path ~ '^(catalog|counts|temp|templog|check|checklog|haccp|haccplog)/[A-Za-z0-9_.-]{1,80}$');
 
 create index if not exists voorraad_docs_history_path_idx on public.voorraad_docs_history (path, saved_at desc);
 

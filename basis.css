@@ -199,3 +199,25 @@ textarea.ctxt{min-height:64px;font-size:15px;resize:vertical}
 .dchk{display:inline-flex;align-items:center;gap:6px;font-size:14px;min-height:36px}
 .dchk input{width:20px;height:20px;accent-color:var(--accent)}
 a.pmain{padding:10px 0}
+
+/* ---------- HACCP-registraties ---------- */
+.seg{display:inline-flex;background:var(--surface-2);border-radius:var(--r);padding:3px;gap:3px;align-self:flex-start}
+.seg button{border:0;background:transparent;padding:8px 14px;border-radius:6px;font-weight:600;font-size:14px;min-height:42px;color:var(--muted)}
+.seg.soft button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--control)}
+.flabel{font-size:13px;font-weight:600}
+.hadd li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border-top:1px solid var(--line)}
+.hadd li:first-child{border-top:0}
+.hadd .btn{flex:none;white-space:nowrap}
+.hmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;text-align:left}
+.hmain b{overflow-wrap:anywhere}
+.hsub{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.hbad{font-size:13px;font-weight:600;color:var(--bad);overflow-wrap:anywhere}
+.rows > li + li{border-top:1px solid var(--line)}
+.hrow{display:flex;align-items:flex-start;gap:12px;width:100%;border:0;background:transparent;padding:11px 12px;min-height:56px;text-align:left}
+.hrow.bad{background:var(--bad-bg)}
+.htime{flex:none;width:52px;font-size:12.5px;font-weight:700;color:var(--muted);line-height:1.3;padding-top:2px}
+.hrow .pill{flex:none;margin-top:1px}
+.hgrid th,.hgrid td{min-width:52px}
+.hgrid thead th span{display:inline-block;padding:4px 2px;font-weight:600}
+.hgrid thead th.today span{background:var(--accent);color:var(--on-accent);border-radius:5px;padding:4px 6px}
+.hgrid td.bad{background:var(--bad-bg);color:var(--bad);font-weight:700}
