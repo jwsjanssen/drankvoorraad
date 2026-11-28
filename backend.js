@@ -2,16 +2,49 @@
    De app werkt met documenten op een pad ("catalog/floats", "counts/floats_2026-W47").
    Dit bestand biedt daarvoor: doc(pad).get/set/update/onSnapshot en collection(pad).onSnapshot.
    Alles staat in één tabel `voorraad_docs` (pad + json). Zie supabase/schema.sql.
-   Toegang: eerst inloggen met de toegangscode. De database controleert de code en geeft een
-   sessiesleutel terug; lezen en schrijven kan alleen met die sleutel (functies voorraad_*). */
+   Toegang: eerst inloggen. Je kiest je locatie en afdeling (de plek, bv. floats-keuken) of management,
+   en voert de code van die plek in. De database controleert de code en geeft een sessiesleutel terug;
+   lezen en schrijven kan alleen met die sleutel (functies voorraad_*), en de database geeft een afdeling
+   alleen haar eigen documenten. window.DV_SESSION zegt aan de pagina's wie er is ingelogd. */
 (function(){
 'use strict';
 var cfg=window.DV_CONFIG||{};
 var sb=(cfg.url&&cfg.key&&window.supabase)?window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false}}):null;
 var cache={},stamp={},busy={},ver={},subs=[],waiters=[],loaded=false,loading=false,started=false,maxStamp=null;
 var PRE=(cfg.prefix||'voorraad')+'_';   /* voorraad_ op de echte site, voorraadtest_ op de testsite */
-var TOKEN_KEY=cfg.test?'dv.testtoken':'dv.token',token=null,gate=null;
-try{token=localStorage.getItem(TOKEN_KEY)||null}catch(e){}
+var TOKEN_KEY=cfg.test?'dv.testtoken':'dv.token',PLEK_KEY=cfg.test?'dv.testplek':'dv.plek',token=null,plek=null,gate=null;
+try{token=localStorage.getItem(TOKEN_KEY)||null;plek=localStorage.getItem(PLEK_KEY)||null}catch(e){}
+var PLEKKEN=window.DV_PLEKKEN||[];
+function plekOk(k){return k==='management'||PLEKKEN.some(function(p){return p.key===k})}
+if(!plekOk(plek))plek=null;
+if(!plek)token=null;   /* een sessie van vóór het kiezen van een afdeling: opnieuw inloggen */
+
+/* ---- wie is er ingelogd en wat mag die zien ---- */
+function mkSession(k){
+  if(!k)return null;
+  if(k==='management')return {plek:k,mgmt:true,loc:null,dept:null,label:'Management'};
+  var p=PLEKKEN.filter(function(x){return x.key===k})[0];
+  return {plek:k,mgmt:false,loc:p.loc.toLowerCase(),dept:k.slice(k.indexOf('-')+1),label:p.loc+' · '+p.area};
+}
+var bodyEl=document.body,MODULE=bodyEl.getAttribute('data-module')||(bodyEl.getAttribute('data-page')?'temp':'voorraad');
+var ROOT=MODULE==='start'?'./':'../';
+function pagePlek(){
+  var k=bodyEl.getAttribute('data-page')||(/[?&]p=([a-z0-9-]+)/.exec(location.search)||[])[1]||'';
+  if(!k&&MODULE==='park'){var o=PLEKKEN.filter(function(p){return p.park});if(o.length===1)k=o[0].key}
+  return k;
+}
+/* een afdeling ziet de startpagina, haar eigen voorraad en de pagina's van haar eigen plek; management alles */
+function allowed(ses){
+  if(!ses)return false;
+  if(ses.mgmt||MODULE==='start'||MODULE==='voorraad')return true;
+  if(MODULE==='inkoop')return false;
+  return pagePlek()===ses.plek;
+}
+function forget(all){token=null;try{localStorage.removeItem(TOKEN_KEY);if(all)localStorage.removeItem(PLEK_KEY)}catch(e){}}
+var session=token?mkSession(plek):null;
+if(session&&!allowed(session)){location.replace(ROOT);return}
+if(session){session.logout=function(){forget(true);location.replace(ROOT)};session.root=ROOT}
+window.DV_SESSION=session;
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function merge(t,s){Object.keys(s).forEach(function(k){var v=s[k];if(v&&typeof v==='object'&&!Array.isArray(v)){if(!t[k]||typeof t[k]!=='object'||Array.isArray(t[k]))t[k]={};merge(t[k],v)}else t[k]=v});return t}
@@ -130,42 +163,70 @@ function collection(path){
 /* Inlogscherm: dekt de hele pagina af tot de juiste code is ingevoerd. */
 function expire(){
   if(!token)return;
-  token=null;try{localStorage.removeItem(TOKEN_KEY)}catch(e){}
-  showGate('Je bent uitgelogd. Voer de toegangscode opnieuw in.');
+  forget(false);
+  showGate('Je bent uitgelogd. Voer de code opnieuw in.');
 }
+/* Drie stappen: locatie (of management), afdeling, code. De laatst gekozen plek wordt onthouden,
+   zodat je op een vast apparaat alleen nog de code hoeft in te voeren. */
+var ORDER=['receptie','keuken','bar','housekeeping'];
+function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function showGate(msg){
-  if(gate){if(msg)gate.querySelector('.gate-msg').textContent=msg;return}
+  if(gate){if(msg){var m=gate.querySelector('.gate-msg');if(m)m.textContent=msg}return}
+  var pick=plekOk(plek)?plek:null,loc=null,note=msg||'';
   gate=document.createElement('div');gate.className='gate';gate.setAttribute('role','dialog');gate.setAttribute('aria-modal','true');gate.setAttribute('aria-labelledby','gate-h');
-  gate.innerHTML='<form class="gate-card" novalidate>'
-    +'<span class="brand-mark" aria-hidden="true"></span>'
-    +'<h1 id="gate-h">'+(window.DV_TITLE||'Drankvoorraad')+'</h1>'
-    +'<p class="muted">FLOATS &amp; ALTSTADT. Voer de toegangscode in om verder te gaan.</p>'
-    +(cfg.test?'<p class="note warn">Dit is de testversie. Wat je hier invult, komt niet op de echte site.</p>':'')
-    +'<div class="field"><label for="gate-code">Toegangscode</label>'
-    +'<input class="input" id="gate-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="64" required></div>'
-    +'<p class="gate-msg" role="alert"></p>'
-    +'<button class="btn primary" type="submit">Inloggen</button>'
-    +'</form>';
   document.body.appendChild(gate);
-  var form=gate.querySelector('form'),inp=gate.querySelector('#gate-code'),out=gate.querySelector('.gate-msg'),btn=gate.querySelector('button');
-  if(msg)out.textContent=msg;
-  form.addEventListener('submit',function(ev){
+  function locs(){var a=[];PLEKKEN.forEach(function(p){if(a.indexOf(p.loc)<0)a.push(p.loc)});return a}
+  function areas(l){return PLEKKEN.filter(function(p){return p.loc===l}).sort(function(a,b){var x=ORDER.indexOf(a.key.slice(a.key.indexOf('-')+1)),y=ORDER.indexOf(b.key.slice(b.key.indexOf('-')+1));return (x<0?99:x)-(y<0?99:y)})}
+  function head(t,sub){return '<span class="brand-mark" aria-hidden="true"></span><h1 id="gate-h">'+t+'</h1>'+(sub?'<p class="muted">'+sub+'</p>':'')
+    +(cfg.test?'<p class="note warn">Dit is de testversie. Wat je hier invult, komt niet op de echte site.</p>':'')}
+  function draw(){
+    var h;
+    if(pick){
+      var ses=mkSession(pick);
+      h='<form class="gate-card" novalidate>'+head('Inloggen','')
+        +'<div class="gate-who"><b>'+esc(ses.label)+'</b><button type="button" class="gate-back" data-back>Andere afdeling</button></div>'
+        +'<div class="field"><label for="gate-code">Code'+(ses.mgmt?' van management':' van je afdeling')+'</label>'
+        +'<input class="input" id="gate-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="64" required></div>'
+        +'<p class="gate-msg" role="alert">'+esc(note)+'</p><button class="btn primary" type="submit">Inloggen</button></form>';
+    }else if(loc){
+      h='<div class="gate-card">'+head(esc(loc),'Op welke afdeling werk je?')
+        +'<div class="gate-opts">'+areas(loc).map(function(p){return '<button type="button" class="btn gate-opt" data-plek="'+p.key+'">'+esc(p.area)+'</button>'}).join('')+'</div>'
+        +'<button type="button" class="gate-back" data-back>‹ Terug</button></div>';
+    }else{
+      h='<div class="gate-card">'+head('Inloggen','Kies eerst waar je werkt.')
+        +(note?'<p class="gate-msg" role="alert">'+esc(note)+'</p>':'')
+        +'<div class="gate-opts">'+locs().map(function(l){return '<button type="button" class="btn gate-opt gate-loc" data-gloc="'+esc(l)+'" data-loc="'+esc(l.toLowerCase())+'">'+esc(l)+'</button>'}).join('')
+        +'<button type="button" class="btn gate-opt gate-mgmt" data-plek="management">Management</button></div></div>';
+    }
+    gate.innerHTML=h;
+    var f=gate.querySelector('#gate-code')||gate.querySelector('.gate-opt');
+    setTimeout(function(){try{if(f)f.focus()}catch(e){}},50);
+  }
+  gate.addEventListener('click',function(ev){
+    var b=ev.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-back')){if(pick){var s0=mkSession(pick);loc=s0.mgmt?null:PLEKKEN.filter(function(p){return p.key===pick})[0].loc;pick=null}else loc=null;note='';draw();return}
+    if(b.hasAttribute('data-gloc')){loc=b.getAttribute('data-gloc');note='';draw();return}
+    if(b.hasAttribute('data-plek')){pick=b.getAttribute('data-plek');note='';draw();return}
+  });
+  gate.addEventListener('submit',function(ev){
     ev.preventDefault();
-    var code=inp.value.trim();
-    if(!code){out.textContent='Vul de toegangscode in.';inp.focus();return}
+    var inp=gate.querySelector('#gate-code'),out=gate.querySelector('.gate-msg'),btn=gate.querySelector('button[type=submit]'),code=inp.value.trim(),want=pick;
+    if(!code){out.textContent='Vul de code in.';inp.focus();return}
     btn.disabled=true;btn.textContent='Controleren…';out.textContent='';
     function again(t){btn.disabled=false;btn.textContent='Inloggen';out.textContent=t;inp.value='';inp.focus()}
-    sb.rpc(PRE+'login',{p_code:code}).then(function(r){
+    sb.rpc(PRE+'login',{p_code:code,p_plek:want}).then(function(r){
       if(r.error)throw r.error;
       var d=r.data||{};
       if(d.ok&&d.token){
-        token=d.token;try{localStorage.setItem(TOKEN_KEY,token)}catch(e){}
-        gate.remove();gate=null;load(true);return;
+        try{localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem(PLEK_KEY,want)}catch(e){}
+        /* opnieuw laden, zodat elke pagina weet wie er is ingelogd; een pagina die niet bij deze afdeling hoort gaat naar de startpagina */
+        if(allowed(mkSession(want)))location.reload();else location.replace(ROOT);
+        return;
       }
       again(d.reason==='locked'?'Te veel foute pogingen. Probeer het over een kwartier opnieuw.':'Die code klopt niet. Probeer het opnieuw.');
     }).then(null,function(){again('Inloggen lukt nu niet. Controleer je internetverbinding en probeer het opnieuw.')});
   });
-  setTimeout(function(){try{inp.focus()}catch(e){}},50);
+  draw();
 }
 
 /* Geen persoonlijke accounts: wie de code heeft mag lezen en schrijven; wie telt vult zijn naam in bij het afronden. */
@@ -192,5 +253,7 @@ if(cfg.test){
   document.title='TEST · '+document.title;
 }
 var caps={db:sb?{doc:doc,collection:collection}:null,user:user,downloads:downloads};
+/* niet ingelogd: meteen het inlogscherm, ook op een pagina die zelf geen gegevens ophaalt */
+if(sb&&!token)showGate();
 window.claude={use:function(n){return Promise.resolve(caps[n]||null)}};
 })();

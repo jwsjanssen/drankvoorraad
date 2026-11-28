@@ -65,11 +65,14 @@ $$;
 alter table public.voorraad_docs enable row level security;
 alter table public.voorraad_docs_history enable row level security;
 
--- Toegang met een code. De website praat alleen via onderstaande functies met de database:
--- eerst voorraad_login(code) -> sessiesleutel, daarna lezen en schrijven met die sleutel.
--- De code zelf staat nergens leesbaar: alleen een hash in voorraad_toegang.
--- Code instellen of wijzigen (in de SQL Editor):  select public.voorraad_code_instellen('....');
--- Daarna moet iedereen opnieuw inloggen.
+-- Toegang met een code per plek. Bij het inloggen kiest iemand eerst de locatie en de afdeling (de plek,
+-- bv. 'floats-keuken') of 'management', en voert dan de code van die plek in.
+-- De website praat alleen via onderstaande functies met de database:
+-- eerst voorraad_login(code, plek) -> sessiesleutel, daarna lezen en schrijven met die sleutel.
+-- Een sessie van een afdeling kan alleen bij de documenten van die afdeling (zie voorraad_mag);
+-- management kan overal bij. De codes zelf staan nergens leesbaar: alleen een hash in voorraad_codes.
+-- Code instellen of wijzigen (in de SQL Editor):  select public.voorraad_code_instellen('floats-keuken', '....');
+-- Daarna moet die plek opnieuw inloggen.
 create extension if not exists pgcrypto with schema extensions;
 
 create table if not exists public.voorraad_toegang (
@@ -88,26 +91,54 @@ create table if not exists public.voorraad_pogingen (
   at timestamptz not null default now()
 );
 create index if not exists voorraad_pogingen_at_idx on public.voorraad_pogingen (at);
+create table if not exists public.voorraad_codes (
+  plek       text primary key check (plek ~ '^[a-z0-9-]{2,40}$'),
+  code_hash  text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.voorraad_sessies add column if not exists plek text;
 
 alter table public.voorraad_toegang  enable row level security;
 alter table public.voorraad_sessies  enable row level security;
 alter table public.voorraad_pogingen enable row level security;
-revoke all on public.voorraad_toegang, public.voorraad_sessies, public.voorraad_pogingen from public, anon, authenticated;
+alter table public.voorraad_codes    enable row level security;
+revoke all on public.voorraad_toegang, public.voorraad_sessies, public.voorraad_pogingen, public.voorraad_codes from public, anon, authenticated;
 
-create or replace function public.voorraad_code_instellen(p_code text) returns void
+drop function if exists public.voorraad_code_instellen(text);
+create or replace function public.voorraad_code_instellen(p_plek text, p_code text) returns void
 language plpgsql set search_path = public, extensions as $$
 begin
+  if p_plek is null or p_plek !~ '^[a-z0-9-]{2,40}$' then
+    raise exception 'ongeldige plek';
+  end if;
   if p_code is null or length(p_code) < 4 or length(p_code) > 64 then
     raise exception 'de code moet 4 tot 64 tekens hebben';
   end if;
-  insert into public.voorraad_toegang (id, code_hash) values (1, crypt(p_code, gen_salt('bf', 10)))
-  on conflict (id) do update set code_hash = excluded.code_hash, updated_at = now();
-  delete from public.voorraad_sessies;
+  insert into public.voorraad_codes (plek, code_hash) values (p_plek, crypt(p_code, gen_salt('bf', 10)))
+  on conflict (plek) do update set code_hash = excluded.code_hash, updated_at = now();
+  delete from public.voorraad_sessies where plek = p_plek or plek is null;
+  delete from public.voorraad_pogingen;
+end $$;
+
+-- Zelfde, maar met een kant-en-klare bcrypt-hash, zodat de code zelf niet in de SQL Editor hoeft te staan.
+create or replace function public.voorraad_codehash_instellen(p_plek text, p_hash text) returns void
+language plpgsql set search_path = public, extensions as $$
+begin
+  if p_plek is null or p_plek !~ '^[a-z0-9-]{2,40}$' then
+    raise exception 'ongeldige plek';
+  end if;
+  if p_hash is null or p_hash !~ '^\$2a\$[0-9]{2}\$[./A-Za-z0-9]{53}$' then
+    raise exception 'geef een bcrypt-hash die begint met $2a$';
+  end if;
+  insert into public.voorraad_codes (plek, code_hash) values (p_plek, p_hash)
+  on conflict (plek) do update set code_hash = excluded.code_hash, updated_at = now();
+  delete from public.voorraad_sessies where plek = p_plek or plek is null;
   delete from public.voorraad_pogingen;
 end $$;
 
 -- Inloggen. Rem op raden: hooguit 6 foute pogingen per kwartier per adres en 40 per uur in totaal.
-create or replace function public.voorraad_login(p_code text) returns jsonb
+drop function if exists public.voorraad_login(text);
+create or replace function public.voorraad_login(p_code text, p_plek text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_ip text; v_hash text; v_token text; n_ip int; n_all int;
@@ -126,7 +157,7 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'locked');
   end if;
 
-  select code_hash into v_hash from public.voorraad_toegang where id = 1;
+  select code_hash into v_hash from public.voorraad_codes where plek = p_plek;
   if v_hash is null or p_code is null or length(p_code) > 64 or crypt(p_code, v_hash) <> v_hash then
     insert into public.voorraad_pogingen (ip) values (v_ip);
     return jsonb_build_object('ok', false, 'reason', 'wrong');
@@ -134,16 +165,42 @@ begin
 
   v_token := encode(gen_random_bytes(32), 'hex');
   delete from public.voorraad_sessies where expires_at < now();
-  insert into public.voorraad_sessies (token_hash, expires_at)
-  values (encode(digest(v_token, 'sha256'), 'hex'), now() + interval '180 days');
-  return jsonb_build_object('ok', true, 'token', v_token);
+  insert into public.voorraad_sessies (token_hash, expires_at, plek)
+  values (encode(digest(v_token, 'sha256'), 'hex'), now() + interval '180 days', p_plek);
+  return jsonb_build_object('ok', true, 'token', v_token, 'plek', p_plek);
 end $$;
 
+-- Bij welke plek hoort deze sessie (leeg = geen geldige sessie).
+create or replace function public.voorraad_sessie_plek(p_token text) returns text
+language sql stable security definer set search_path = public, extensions as $$
+  select s.plek from public.voorraad_sessies s
+  where p_token is not null and length(p_token) = 64
+    and s.token_hash = encode(digest(p_token, 'sha256'), 'hex') and s.expires_at > now() and s.plek is not null;
+$$;
 create or replace function public.voorraad_sessie_ok(p_token text) returns boolean
 language sql stable security definer set search_path = public, extensions as $$
-  select p_token is not null and length(p_token) = 64 and exists (
-    select 1 from public.voorraad_sessies s
-    where s.token_hash = encode(digest(p_token, 'sha256'), 'hex') and s.expires_at > now());
+  select public.voorraad_sessie_plek(p_token) is not null;
+$$;
+
+-- Wat mag een plek lezen en schrijven? Management alles. Een afdeling alleen haar eigen documenten:
+-- de productlijst van haar locatie, haar eigen tellingen (bar: <locatie>_<week>, anders <plek>_<week>)
+-- en de documenten die met haar plek beginnen (temperaturen, checklijsten, HACCP, parkeren).
+-- De inkoop uit facturen is alleen voor management.
+create or replace function public.voorraad_mag(p_plek text, p_path text) returns boolean
+language sql immutable as $$
+  select case
+    when p_plek is null then false
+    when p_plek = 'management' then true
+    else (
+      select case
+        when x.k = 'catalog' then x.id = x.loc
+        when x.k = 'counts' then x.id like (case when x.dept = 'bar' then x.loc else p_plek end) || '\_%'
+        when x.k in ('inkoop', 'inkooplog') then false
+        else x.id = p_plek or x.id like p_plek || '\_%'
+      end
+      from (select split_part(p_path, '/', 1) as k, split_part(p_path, '/', 2) as id,
+                   split_part(p_plek, '-', 1) as loc, split_part(p_plek, '-', 2) as dept) x)
+  end
 $$;
 
 -- p_prefixes: alleen documenten van die soorten, bv. '{temp,templog}'. Leeg = alles.
@@ -151,22 +208,27 @@ drop function if exists public.voorraad_lezen(text, timestamptz);
 create or replace function public.voorraad_lezen(p_token text, p_since timestamptz default null, p_prefixes text[] default null)
 returns table (path text, data jsonb, updated_at timestamptz)
 language plpgsql stable security definer set search_path = public, extensions as $$
+declare v_plek text := public.voorraad_sessie_plek(p_token);
 begin
-  if not public.voorraad_sessie_ok(p_token) then
+  if v_plek is null then
     raise exception 'geen toegang' using errcode = '28000';
   end if;
   return query
     select d.path, d.data, d.updated_at from public.voorraad_docs d
     where (p_since is null or d.updated_at > p_since)
+      and public.voorraad_mag(v_plek, d.path)
       and (p_prefixes is null or split_part(d.path, '/', 1) = any (p_prefixes));
 end $$;
 
 create or replace function public.voorraad_schrijven(p_token text, p_path text, p_data jsonb) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
-declare r jsonb;
+declare r jsonb; v_plek text := public.voorraad_sessie_plek(p_token);
 begin
-  if not public.voorraad_sessie_ok(p_token) then
+  if v_plek is null then
     raise exception 'geen toegang' using errcode = '28000';
+  end if;
+  if not public.voorraad_mag(v_plek, p_path) then
+    raise exception 'niet toegestaan voor deze afdeling' using errcode = '42501';
   end if;
   insert into public.voorraad_docs as d (path, data) values (p_path, p_data)
   on conflict (path) do update set data = excluded.data
@@ -176,10 +238,13 @@ end $$;
 
 create or replace function public.voorraad_bijwerken(p_token text, p_path text, p_patch jsonb) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
-declare r jsonb;
+declare r jsonb; v_plek text := public.voorraad_sessie_plek(p_token);
 begin
-  if not public.voorraad_sessie_ok(p_token) then
+  if v_plek is null then
     raise exception 'geen toegang' using errcode = '28000';
+  end if;
+  if not public.voorraad_mag(v_plek, p_path) then
+    raise exception 'niet toegestaan voor deze afdeling' using errcode = '42501';
   end if;
   update public.voorraad_docs d
      set data = public.voorraad_deep_merge(d.data, p_patch)
@@ -191,13 +256,16 @@ begin
   return r;
 end $$;
 
-revoke execute on function public.voorraad_code_instellen(text) from public, anon, authenticated;
+revoke execute on function public.voorraad_code_instellen(text, text) from public, anon, authenticated;
+revoke execute on function public.voorraad_codehash_instellen(text, text) from public, anon, authenticated;
 revoke execute on function public.voorraad_sessie_ok(text) from public, anon, authenticated;
-revoke execute on function public.voorraad_login(text) from public;
+revoke execute on function public.voorraad_sessie_plek(text) from public, anon, authenticated;
+revoke execute on function public.voorraad_mag(text, text) from public, anon, authenticated;
+revoke execute on function public.voorraad_login(text, text) from public;
 revoke execute on function public.voorraad_lezen(text, timestamptz, text[]) from public;
 revoke execute on function public.voorraad_schrijven(text, text, jsonb) from public;
 revoke execute on function public.voorraad_bijwerken(text, text, jsonb) from public;
-grant execute on function public.voorraad_login(text) to anon, authenticated;
+grant execute on function public.voorraad_login(text, text) to anon, authenticated;
 grant execute on function public.voorraad_lezen(text, timestamptz, text[]) to anon, authenticated;
 grant execute on function public.voorraad_schrijven(text, text, jsonb) to anon, authenticated;
 grant execute on function public.voorraad_bijwerken(text, text, jsonb) to anon, authenticated;
