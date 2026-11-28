@@ -279,3 +279,4 @@ table.plist{width:100%;border-collapse:collapse;font-size:14px}
 .mews-box{flex:none;width:30px;height:30px;border:2px solid var(--control);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:transparent}
 .btn.mews[aria-pressed="true"]{border-color:var(--good);background:var(--good-bg)}
 .btn.mews[aria-pressed="true"] .mews-box{background:var(--good);border-color:var(--good);color:var(--surface)}
+.pchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}

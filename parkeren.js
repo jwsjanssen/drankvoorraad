@@ -94,6 +94,14 @@ function missing(b){
   return m;
 }
 function depOpen(b){return (b.dep==='cash'||b.dep==='cc')&&!b.depBack}
+function depBackLabel(dep){return dep==='cash'?'Borg contant terugbetaald':dep==='cc'?'Borg op creditcard teruggestort of vrijgegeven':'Borg terugbetaald of teruggestort'}
+/* wat er na het verblijf nog openstaat: sleutel en borg worden apart gecontroleerd */
+function afterOpen(b){
+  var a=[];
+  if(!b.keyBack)a.push('parkeersleutel nog niet terug');
+  if(depOpen(b))a.push(b.dep==='cash'?'borg (contant) nog niet terugbetaald':'borg (creditcard) nog niet teruggestort');
+  return a;
+}
 function needsCheckout(b){return !!b.keyOut&&b.to<=today()&&(!b.keyBack||depOpen(b))}
 /* stand van één dag: per plek wie er staat, wie er vertrekt en of de plek vrij of geblokkeerd is */
 function dayState(day,bs){
@@ -122,8 +130,10 @@ function issues(){
     }else if(b.to<=td){
       var due=b.to===td;
       if(!b.keyOut)a.push({b:b,day:b.to,sev:'bad',title:who,text:'Gereserveerd tot '+dayLabel(b.to)+', maar nooit geactiveerd. Zet de reservering op "niet gekomen" of activeer hem alsnog.'});
-      else if(!b.keyBack)a.push({b:b,day:b.to,sev:due?'warn':'bad',title:who,text:due?'Vertrekt vandaag: meld af als de sleutel terug is'+(depOpen(b)?' en de borg is teruggegeven':'')+'.':'Sleutel niet terug sinds '+dayLabel(b.to)+'.'});
-      else if(depOpen(b))a.push({b:b,day:b.to,sev:due?'warn':'bad',title:who,text:'Sleutel is terug, maar de borg ('+DEP[b.dep].toLowerCase()+') is nog niet teruggegeven of geannuleerd.'});
+      else{
+        var open=afterOpen(b);
+        if(open.length)a.push({b:b,day:b.to,sev:due?'warn':'bad',tag:'Vertrek',title:who,text:(due?'Vertrekt vandaag':'Vertrokken op '+dayLabel(b.to))+': '+open.join(' en ')+'.'});
+      }
     }
   });
   deposits().forEach(function(d){
@@ -192,13 +202,13 @@ function leaveAct(b){
   var td=today();
   if(b.to>td)return '<span class="pill">Vertrekt</span>';
   if(!b.keyOut)return '<span class="pill bad">Niet geactiveerd</span>';
-  if(needsCheckout(b))return '<button type="button" class="btn primary" data-out="'+esc(b.id)+'">Afmelden</button>';
+  if(needsCheckout(b))return '<button type="button" class="btn primary" data-out="'+esc(b.id)+'">'+(b.keyBack?'Borg terug':'Afmelden')+'</button>';
   return '<span class="pill good">Afgehandeld</span>';
 }
 function line(b,day,tag,act){
   var late=!b.keyOut&&b.from<today()&&b.to>today();
   return '<div class="pline"><button type="button" class="pedit" data-bid="'+esc(b.id)+'"><span class="hmain">'+(tag||'')+'<b>'+esc(b.name||'Gast zonder naam')+'</b><span class="hsub">'+esc(bookingSub(b,day))+'</span>'
-    +(late?'<span class="hbad">Niet geactiveerd sinds '+esc(dayLabel(b.from))+'</span>':'')+(b.mews?'':'<span class="hbad">Kosten nog niet in Mews</span>')+(b.note?'<span class="hsub">'+esc(b.note)+'</span>':'')+'</span></button><span class="pact">'+act+'</span></div>';
+    +(late?'<span class="hbad">Niet geactiveerd sinds '+esc(dayLabel(b.from))+'</span>':'')+(b.keyOut&&b.to<today()&&afterOpen(b).length?'<span class="hbad">'+esc(cap(afterOpen(b).join(' en ')))+'</span>':'')+(b.mews?'':'<span class="hbad">Kosten nog niet in Mews</span>')+(b.note?'<span class="hsub">'+esc(b.note)+'</span>':'')+'</span></button><span class="pact">'+act+'</span></div>';
 }
 function renderCal(is){
   var mo=S.month,td=today(),bs=bookings(),n=daysIn(mo),first=wday(mo+'-01'),issueDays={};
@@ -275,7 +285,7 @@ function openBooking(bid,sid,kind,day0){
     if(act){
       h+='<div class="grid2"><div class="field"><label for="b-plate">Kenteken</label><input class="input" id="b-plate" autocomplete="off" autocapitalize="characters" maxlength="20" value="'+esc(plateFmt(b.plate))+'"></div>'
         +'<div class="field"><label for="b-dep">Borg</label><select class="input" id="b-dep"><option value="">Nog niet ingevuld</option>'+Object.keys(DEP).map(function(k){return '<option value="'+k+'"'+(b.dep===k?' selected':'')+'>'+DEP[k]+'</option>'}).join('')+'</select></div></div>';
-      h+='<div class="stack pchecks">'+chk('b-out','Geactiveerd: sleutel uitgegeven',true,stampText(b.keyOut))+chk('b-back','Sleutel terug',b.keyBack,stampText(b.keyBack))+chk('b-depback','Borg teruggegeven of geannuleerd',b.depBack,stampText(b.depBack))+'</div>';
+      h+='<div class="stack pchecks">'+chk('b-out','Geactiveerd: sleutel uitgegeven',true,stampText(b.keyOut))+chk('b-back','Parkeersleutel terug',b.keyBack,stampText(b.keyBack))+chk('b-depback',depBackLabel(b.dep),b.depBack,stampText(b.depBack))+'</div>';
     }else if(b)h+='<div class="stack pchecks">'+chk('b-noshow','Niet gekomen (plek komt vrij)',b.noshow,stampText(b.noshow))+'</div>'
       +(b.from<=today()&&!b.noshow?'<div class="note spread"><span>Is de gast er? Dan activeer je de plek met kenteken, borg en sleutel.</span><button type="button" class="btn" data-act="'+esc(b.id)+'">Activeren</button></div>':'');
   }
@@ -361,7 +371,7 @@ function openCheckout(bid){
   if(!needName())return;
   var dep=b.dep==='cash'||b.dep==='cc';
   var h='<h2>Plek afmelden</h2>'+summary(b)+'<p class="muted" style="margin-top:-6px">Kamer '+esc(b.room||'?')+' · '+esc(plateFmt(b.plate)||'geen kenteken')+' · '+esc(b.dep==='geen'?'geen borg':b.dep?'borg '+DEP[b.dep].toLowerCase():'borg niet ingevuld')+'</p>'
-    +'<div class="stack pchecks">'+chk('o-back','Sleutel terug',true,stampText(b.keyBack))+(dep?chk('o-depback','Borg ('+DEP[b.dep].toLowerCase()+') teruggegeven of geannuleerd',true,stampText(b.depBack)):'')+'</div>'
+    +'<div class="stack pchecks">'+chk('o-back','Parkeersleutel terug',true,stampText(b.keyBack))+(dep?chk('o-depback',depBackLabel(b.dep),true,stampText(b.depBack)):'')+'</div>'
     +'<p class="muted" style="font-size:13.5px">Haal een vinkje weg als dat nog niet is gebeurd; de plek blijft dan in de controle staan.</p>'
     +'<p class="gate-msg" id="o-msg" role="alert" style="min-height:0"></p><div class="spread"><button class="btn ghost" data-bid="'+esc(b.id)+'">Gegevens aanpassen</button><span class="rowflex"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="o-save">Afmelden</button></span></div>';
   openModal(h);$('#modal .sheet').setAttribute('data-bid',bid);
@@ -371,7 +381,7 @@ function doCheckout(){
   var f={keyBack:$('#o-back').checked?(b.keyBack||stamp()):null},c=$('#o-depback');
   if(c)f.depBack=c.checked?(b.depBack||stamp()):null;
   var btn=$('#o-save');btn.disabled=true;btn.textContent='Afmelden…';
-  saveBooking(b.doc,b.id,f).then(function(){closeModal();toast(f.keyBack&&(!c||f.depBack)?'Plek '+spotName(b.spot)+' is afgemeld.':'Opgeslagen. Er staat nog iets open.')},function(){btn.disabled=false;btn.textContent='Afmelden';$('#o-msg').textContent='Opslaan lukt niet. Controleer je internetverbinding.'});
+  saveBooking(b.doc,b.id,f).then(function(){closeModal();toast(f.keyBack&&(!c||f.depBack)?'Plek '+spotName(b.spot)+' is afgemeld.':'Opgeslagen. '+cap(afterOpen({keyBack:f.keyBack,dep:b.dep,depBack:c?f.depBack:b.depBack}).join(' en '))+'.')},function(){btn.disabled=false;btn.textContent='Afmelden';$('#o-msg').textContent='Opslaan lukt niet. Controleer je internetverbinding.'});
 }
 /* vanuit de controle: open meteen de stap die nodig is */
 function openFor(bid){
@@ -392,11 +402,11 @@ function doDeleteBooking(){
 function renderCheck(is){
   var td=today(),st=dayState(td),now0=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&r.stay.keyOut}).length;
   var h='<section class="stack"><div><h2>Controle</h2><span class="muted">'+esc(dayLabel(td))+' · '+st.sold+' van '+st.total+' plekken verhuurd, '+now0+' geactiveerd</span></div>';
-  if(!is.length)h+='<div class="note good">Alles is geactiveerd en afgemeld. Er staat niemand zonder registratie en alle sleutels en borgen kloppen.</div>';
+  if(!is.length)h+='<div class="note good">Alles is geactiveerd en afgemeld. Er staat niemand zonder registratie, alle parkeersleutels zijn terug en alle borgen zijn terugbetaald of teruggestort.</div>';
   else{
     h+='<ul class="rows">'+is.map(function(i){
       return '<li><button type="button" class="hrow'+(i.sev==='bad'?' bad':'')+'" '+(i.b?'data-go="'+esc(i.b.id)+'"':'data-did="'+esc(i.d.id)+'"')+'><span class="hmain"><b>'+esc(i.title)+'</b><span class="'+(i.sev==='bad'?'hbad':'hsub')+'">'+esc(i.text)+'</span></span><span class="pill '+i.sev+'">'+(i.sev==='bad'?'Actie nodig':(i.tag||'Vandaag'))+'</span></button></li>';
-    }).join('')+'</ul><p class="muted" style="font-size:13px">Tik op een regel om te activeren, af te melden of aan te vullen. Rood is te laat, geel hoort bij vandaag of bij een reservering die nog in Mews moet.</p>';
+    }).join('')+'</ul><p class="muted" style="font-size:13px">Tik op een regel om te activeren, af te melden of aan te vullen. Rood is te laat, geel hoort bij vandaag of bij een reservering die nog in Mews moet. Na het verblijf blijft een gast hier staan tot de parkeersleutel terug is en de borg is terugbetaald of teruggestort.</p>';
   }
   h+='<div class="stack"><h3>Wie staat er nu</h3>';
   var now=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&r.stay.keyOut}),wait=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&!r.stay.keyOut}).length;
@@ -404,11 +414,22 @@ function renderCheck(is){
     return '<tr><td class="num"><b>'+esc(r.s.nr)+'</b></td><td>'+esc(b.name)+'</td><td class="num">'+(b.room?esc(b.room):'<span class="miss">?</span>')+'</td><td class="num">'+(b.plate?esc(plateFmt(b.plate)):'<span class="miss">?</span>')+'</td><td>'+esc(dayLabel(b.to))+'</td><td>'+(b.dep?esc(DEP[b.dep]):'<span class="miss">?</span>')+'</td></tr>'}).join('')+'</tbody></table></div>'
     :'<div class="card"><p class="muted">Er is nu geen plek geactiveerd.</p></div>';
   if(wait)h+='<p class="muted" style="font-size:13px">'+wait+' gereserveerde '+(wait===1?'plek is':'plekken zijn')+' nog niet geactiveerd en '+(wait===1?'staat':'staan')+' daarom niet in deze lijst.</p>';
+  h+='</div>';
+  /* na het verblijf: vertrekken van de laatste 14 dagen, plus alles van eerder dat nog openstaat */
+  var lim=addDays(td,-14),gone=bookings().filter(function(b){return b.kind==='gast'&&!b.noshow&&b.keyOut&&b.to<=td&&(b.to>=lim||afterOpen(b).length)})
+    .sort(function(x,y){var ox=afterOpen(x).length?0:1,oy=afterOpen(y).length?0:1;return ox-oy||(x.to<y.to?1:-1)});
+  h+='<div class="stack"><div class="spread"><h3>Na het verblijf</h3><span class="muted" style="font-size:13px">sleutel terug en borg terug, per vertrokken gast</span></div>';
+  h+=gone.length?'<ul class="rows">'+gone.map(function(b){
+    var dep=b.dep==='cash'||b.dep==='cc',open=afterOpen(b).length;
+    return '<li><button type="button" class="hrow'+(open&&b.to<td?' bad':'')+'" data-go="'+esc(b.id)+'"><span class="htime num">'+esc(spotName(b.spot))+'</span><span class="hmain"><b>'+esc(b.name||'Gast zonder naam')+'</b><span class="hsub">vertrek '+esc(dayLabel(b.to))+(b.room?' · kamer '+esc(b.room):'')+(b.plate?' · '+esc(plateFmt(b.plate)):'')+'</span>'
+      +'<span class="pchips"><span class="pill '+(b.keyBack?'good':'bad')+'">'+(b.keyBack?'✓ Sleutel terug':'✗ Sleutel niet terug')+'</span>'
+      +(dep?'<span class="pill '+(b.depBack?'good':'bad')+'">'+(b.depBack?'✓ Borg terug':'✗ Borg niet terug')+' ('+DEP[b.dep].toLowerCase()+')</span>':'<span class="pill">'+(b.dep==='geen'?'Geen borg':'Borg onbekend')+'</span>')+'</span></span></button></li>';
+  }).join('')+'</ul>':'<div class="card"><p class="muted">Nog geen vertrokken gasten in de laatste 14 dagen.</p></div>';
   h+='</div><div class="rowflex"><button class="btn" id="csv">Download '+esc(monthLabel(td.slice(0,7)))+' (CSV)</button><span class="muted" style="font-size:13px">Alle verhuringen die deze maand lopen of liepen.</span></div></section>';
   $('#view').innerHTML=h;
 }
 function buildCsv(mo){
-  var a=mo+'-01',z=addDays(mo+'-'+p2(daysIn(mo)),1),L=[['Plek','Soort','Naam of reden','Kamer','Kenteken','Aankomst','Vertrek','Nachten','Borg','Kosten in Mews','Geactiveerd (sleutel uit)','Sleutel terug','Borg terug','Niet gekomen','Opmerking','Ingevoerd door']];
+  var a=mo+'-01',z=addDays(mo+'-'+p2(daysIn(mo)),1),L=[['Plek','Soort','Naam of reden','Kamer','Kenteken','Aankomst','Vertrek','Nachten','Borg','Kosten in Mews','Geactiveerd (sleutel uit)','Parkeersleutel terug','Borg terugbetaald of teruggestort','Niet gekomen','Opmerking','Ingevoerd door']];
   function q(v){v=String(v==null?'':v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
   bookings().filter(function(b){return b.from<z&&a<b.to}).forEach(function(b){
     L.push([spotName(b.spot),b.kind==='blok'?'Blokkade':(b.keyOut?'Verhuring':'Reservering'),b.name,b.room,plateFmt(b.plate),b.from,b.to,nights(b.from,b.to),b.dep?DEP[b.dep]:'',b.kind==='gast'?(stampText(b.mews)||'nee'):'',stampText(b.keyOut),stampText(b.keyBack),stampText(b.depBack),b.noshow?'ja':'',b.note,b.by]);
