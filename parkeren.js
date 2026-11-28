@@ -3,8 +3,11 @@
    Gegevens (zie backend.js):
      park/<plek>                   plekken: {spots:{<sid>:{nr,garage,hold,note,ord,gone}}}
      parklog/<plek>_<JJJJ-MM>      verhuringen en blokkades, in de maand van aankomst:
-                                   {b:{<id>:{kind:'gast'|'blok',spot,name,room,from,to,t1,t2,plate,dep,keyOut,keyBack,depBack,noshow,note,by,at,gone}}}
+                                   {b:{<id>:{kind:'gast'|'blok',spot,name,room,from,to,t1,t2,plate,dep,keyOut,keyBack,depBack,mews,noshow,note,by,at,gone}}}
      parklog/<plek>_kb-<JJJJ>      kamerborg: {d:{<id>:{room,name,to,amount,how,back,note,by,at,gone}}}
+   Twee stappen: eerst reserveren (plek, naam, datums), en pas bij aankomst activeren (kamer, kenteken, borg, sleutel uit = keyOut).
+   Bij vertrek afmelden (sleutel terug = keyBack, borg terug = depBack).
+   mews = de medewerker heeft bevestigd dat de parkeerkosten in Mews (het hotelsysteem) zijn opgeboekt.
    Een verhuring loopt van de dag van aankomst (from) tot de dag van vertrek (to). De plek telt als bezet op from t/m de dag vóór to:
    op de vertrekdag kan dezelfde plek weer aan een volgende gast. */
 (function(){
@@ -68,7 +71,7 @@ function bookings(){
     Object.keys(bs).forEach(function(bid){
       var b=bs[bid];if(!b||b.gone||!isDate(b.from)||!isDate(b.to)||!b.spot)return;
       a.push({id:bid,doc:id,kind:b.kind==='blok'?'blok':'gast',spot:b.spot,name:b.name||'',room:b.room||'',from:b.from,to:b.to,t1:b.t1||'',t2:b.t2||'',plate:b.plate||'',dep:DEP[b.dep]?b.dep:'',
-        keyOut:b.keyOut||null,keyBack:b.keyBack||null,depBack:b.depBack||null,noshow:b.noshow||null,note:b.note||'',by:b.by||''});
+        keyOut:b.keyOut||null,keyBack:b.keyBack||null,depBack:b.depBack||null,mews:b.mews||null,noshow:b.noshow||null,note:b.note||'',by:b.by||''});
     });
   });
   return a.sort(function(x,y){return x.from<y.from?-1:x.from>y.from?1:0});
@@ -88,9 +91,10 @@ function missing(b){
   if(!b.room)m.push('kamernummer');
   if(!b.plate)m.push('kenteken');
   if(!b.dep)m.push('borg');
-  if(!b.keyOut)m.push('sleutel uitgegeven');
   return m;
 }
+function depOpen(b){return (b.dep==='cash'||b.dep==='cc')&&!b.depBack}
+function needsCheckout(b){return !!b.keyOut&&b.to<=today()&&(!b.keyBack||depOpen(b))}
 /* stand van één dag: per plek wie er staat, wie er vertrekt en of de plek vrij of geblokkeerd is */
 function dayState(day,bs){
   bs=bs||bookings();
@@ -111,14 +115,15 @@ function issues(){
   bookings().forEach(function(b){
     if(b.kind!=='gast'||b.noshow)return;
     var who=(b.name||'Gast zonder naam')+' · plek '+spotName(b.spot);
+    if(!b.mews)a.push({b:b,day:b.from>td?b.from:(b.to<=td?b.to:td),sev:b.from<=td?'bad':'warn',tag:'Mews',title:who,text:'Kosten nog niet opgeboekt in Mews'+(b.from>td?' (aankomst '+dayLabel(b.from)+')':'')+'. Boek ze op en bevestig het hier.'});
     if(b.from<=td&&td<b.to){
-      var m=missing(b);
-      if(m.length)a.push({b:b,day:td,sev:b.from===td?'warn':'bad',title:who,text:(b.from===td?'Komt vandaag aan':'Staat er sinds '+dayLabel(b.from))+'. Nog niet ingevuld: '+m.join(', ')+'.'});
+      if(!b.keyOut)a.push({b:b,day:td,sev:b.from===td?'warn':'bad',title:who,text:b.from===td?'Komt vandaag aan. Activeer de plek bij aankomst: kenteken, borg en sleutel.':'Had moeten aankomen op '+dayLabel(b.from)+', maar de plek is niet geactiveerd. Activeer hem of zet de reservering op "niet gekomen".'});
+      else{var m=missing(b);if(m.length)a.push({b:b,day:td,sev:'bad',title:who,text:'Geactiveerd, maar nog niet ingevuld: '+m.join(', ')+'.'})}
     }else if(b.to<=td){
       var due=b.to===td;
-      if(!b.keyOut)a.push({b:b,day:b.to,sev:'bad',title:who,text:(due?'Vertrekt vandaag':'Vertrokken op '+dayLabel(b.to))+', maar nooit geregistreerd. Vul de gegevens aan of zet de verhuring op "niet gekomen".'});
-      else if(!b.keyBack)a.push({b:b,day:b.to,sev:due?'warn':'bad',title:who,text:due?'Vertrekt vandaag: sleutel innemen'+(b.dep==='cash'||b.dep==='cc'?' en borg teruggeven of annuleren':'')+'.':'Sleutel niet terug sinds '+dayLabel(b.to)+'.'});
-      else if((b.dep==='cash'||b.dep==='cc')&&!b.depBack)a.push({b:b,day:b.to,sev:due?'warn':'bad',title:who,text:'Sleutel is terug, maar de borg ('+DEP[b.dep].toLowerCase()+') is nog niet teruggegeven of geannuleerd.'});
+      if(!b.keyOut)a.push({b:b,day:b.to,sev:'bad',title:who,text:'Gereserveerd tot '+dayLabel(b.to)+', maar nooit geactiveerd. Zet de reservering op "niet gekomen" of activeer hem alsnog.'});
+      else if(!b.keyBack)a.push({b:b,day:b.to,sev:due?'warn':'bad',title:who,text:due?'Vertrekt vandaag: meld af als de sleutel terug is'+(depOpen(b)?' en de borg is teruggegeven':'')+'.':'Sleutel niet terug sinds '+dayLabel(b.to)+'.'});
+      else if(depOpen(b))a.push({b:b,day:b.to,sev:due?'warn':'bad',title:who,text:'Sleutel is terug, maar de borg ('+DEP[b.dep].toLowerCase()+') is nog niet teruggegeven of geannuleerd.'});
     }
   });
   deposits().forEach(function(d){
@@ -168,33 +173,38 @@ function render(){
 }
 function bookingSub(b,day){
   var a=[];
+  if(!b.keyOut)a.push('gereserveerd');
   if(b.room)a.push('kamer '+b.room);
-  a.push(b.plate?plateFmt(b.plate):'geen kenteken');
+  if(b.keyOut)a.push(b.plate?plateFmt(b.plate):'geen kenteken');
   a.push(b.to===day?'vertrekt vandaag'+(b.t2?' vóór '+b.t2:''):'vertrek '+dayLabel(b.to)+(b.t2?' vóór '+b.t2:''));
   if(b.from===day&&b.t1)a.push('vanaf '+b.t1);
-  if(b.dep)a.push('borg '+DEP[b.dep].toLowerCase());
+  if(b.keyOut&&b.dep)a.push(b.dep==='geen'?'geen borg':'borg '+DEP[b.dep].toLowerCase());
   return a.join(' · ');
 }
-function stayPill(b,day){
+/* rechts op de regel: de volgende stap als knop, anders de stand */
+function stayAct(b){
   var td=today();
-  if(b.from>td)return '<span class="pill">Gereserveerd</span>';
+  if(!b.keyOut)return b.from<=td?'<button type="button" class="btn primary" data-act="'+esc(b.id)+'">Activeren</button>':'<span class="pill">Gereserveerd</span>';
   var m=missing(b);
-  if(!m.length)return '<span class="pill good">Compleet</span>';
-  return '<span class="pill '+(b.from===td?'warn':'bad')+'">'+(b.from===td&&!b.keyOut?'Nog registreren':m.length+' ontbreekt')+'</span>';
+  return m.length?'<span class="pill bad">'+m.length+' ontbreekt</span>':'<span class="pill good">Actief</span>';
 }
-function leavePill(b){
+function leaveAct(b){
   var td=today();
   if(b.to>td)return '<span class="pill">Vertrekt</span>';
-  if(!b.keyOut)return '<span class="pill bad">Niet geregistreerd</span>';
-  if(!b.keyBack)return '<span class="pill '+(b.to===td?'warn':'bad')+'">Sleutel nog niet terug</span>';
-  if((b.dep==='cash'||b.dep==='cc')&&!b.depBack)return '<span class="pill '+(b.to===td?'warn':'bad')+'">Borg nog niet terug</span>';
+  if(!b.keyOut)return '<span class="pill bad">Niet geactiveerd</span>';
+  if(needsCheckout(b))return '<button type="button" class="btn primary" data-out="'+esc(b.id)+'">Afmelden</button>';
   return '<span class="pill good">Afgehandeld</span>';
+}
+function line(b,day,tag,act){
+  var late=!b.keyOut&&b.from<today()&&b.to>today();
+  return '<div class="pline"><button type="button" class="pedit" data-bid="'+esc(b.id)+'"><span class="hmain">'+(tag||'')+'<b>'+esc(b.name||'Gast zonder naam')+'</b><span class="hsub">'+esc(bookingSub(b,day))+'</span>'
+    +(late?'<span class="hbad">Niet geactiveerd sinds '+esc(dayLabel(b.from))+'</span>':'')+(b.mews?'':'<span class="hbad">Kosten nog niet in Mews</span>')+(b.note?'<span class="hsub">'+esc(b.note)+'</span>':'')+'</span></button><span class="pact">'+act+'</span></div>';
 }
 function renderCal(is){
   var mo=S.month,td=today(),bs=bookings(),n=daysIn(mo),first=wday(mo+'-01'),issueDays={};
   is.forEach(function(i){issueDays[i.day]=i.sev==='bad'||issueDays[i.day]==='bad'?'bad':'warn'});
   var h='<section class="stack">';
-  if(is.length)h+='<a class="note '+(is.some(function(i){return i.sev==='bad'})?'bad':'warn')+' spread plink" href="#controle"><span><b>'+is.length+' '+(is.length===1?'punt':'punten')+' om na te kijken.</b> '+esc(is[0].title)+(is.length>1?' en '+(is.length-1)+' meer':'')+'.</span><span class="btn">Bekijk</span></a>';
+  if(is.length)h+='<a class="note '+(is.some(function(i){return i.sev==='bad'})?'bad':'warn')+' spread plink" href="#controle"><span><b>'+(is.some(function(i){return i.sev==='bad'})?is.length+' '+(is.length===1?'punt vraagt':'punten vragen')+' actie.':is.length+' '+(is.length===1?'ding':'dingen')+' te doen vandaag.')+'</b> '+esc(is[0].title)+(is.length>1?' en '+(is.length-1)+' meer':'')+'.</span><span class="btn">Bekijk</span></a>';
   h+='<div class="field"><label for="zoek" class="vh">Zoek op naam, kenteken of kamer</label><input class="input" id="zoek" type="search" autocomplete="off" placeholder="Zoek op naam, kenteken of kamer" value="'+esc(S.q)+'"></div>';
   if(S.q.trim()){h+=searchHtml(bs)+'</section>';$('#view').innerHTML=h;return}
   h+='<div class="daybar"><button class="iconbtn" id="mprev" aria-label="Vorige maand">‹</button><div class="dy"><b>'+esc(cap(monthLabel(mo)))+'</b><span class="muted">Tik op een dag om de plekken te zien</span></div><button class="iconbtn" id="mnext" aria-label="Volgende maand">›</button></div>';
@@ -210,8 +220,8 @@ function renderCal(is){
   $('#view').innerHTML=h;
 }
 function dayHtml(day,bs){
-  var st=dayState(day,bs),td=today();
-  var h='<div class="stack" id="dag"><div class="spread"><div><h2>'+(day===td?'Vandaag · ':'')+esc(dayLabel(day))+'</h2><span class="muted"><b class="num" style="color:var(--ink)">'+st.sold+' van '+st.total+'</b> verhuurd · '+st.free+' vrij'+(st.blocked?' · '+st.blocked+' geblokkeerd':'')+(st.arrive||st.leave?' · '+st.arrive+' aankomst'+(st.arrive===1?'':'en')+', '+st.leave+' vertrek':'')+'</span></div>'
+  var st=dayState(day,bs),td=today(),todo=day<=td?st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&!r.stay.keyOut}).length:0;
+  var h='<div class="stack" id="dag"><div class="spread"><div><h2>'+(day===td?'Vandaag · ':'')+esc(dayLabel(day))+'</h2><span class="muted"><b class="num" style="color:var(--ink)">'+st.sold+' van '+st.total+'</b> verhuurd · '+st.free+' vrij'+(st.blocked?' · '+st.blocked+' geblokkeerd':'')+(todo?' · <b style="color:var(--warn)">'+todo+' nog te activeren</b>':'')+(st.arrive||st.leave?' · '+st.arrive+' aankomst'+(st.arrive===1?'':'en')+', '+st.leave+' vertrek':'')+'</span></div>'
     +(day!==td?'<button class="btn" id="totoday">Naar vandaag</button>':'')+'</div>';
   h+='<div class="card"><div class="field"><label for="naam">Je naam</label><input class="input" id="naam" autocomplete="name" placeholder="Je naam" value="'+esc(ls('naam')||'')+'"><small>Je naam komt bij alles wat je invult of afhandelt.</small></div></div>';
   if(!st.rows.length)return h+'<div class="card empty"><h3>Nog geen parkeerplekken</h3><p>Voeg de plekken toe bij Plekken.</p></div></div>';
@@ -219,10 +229,10 @@ function dayHtml(day,bs){
   st.rows.forEach(function(r){
     var s=r.s;
     h+='<li class="pspot"><div class="pnr"><b>'+esc(s.nr)+'</b>'+(s.garage?'<span>'+esc(s.garage)+'</span>':'')+'</div><div class="pbody">';
-    if(r.leave)h+='<button type="button" class="pline" data-bid="'+esc(r.leave.id)+'"><span class="hmain"><span class="ptag">Vertrekt</span><b>'+esc(r.leave.name||'Gast zonder naam')+'</b><span class="hsub">'+esc(bookingSub(r.leave,day))+'</span></span>'+leavePill(r.leave)+'</button>';
-    if(r.stay&&r.stay.kind==='gast')h+='<button type="button" class="pline" data-bid="'+esc(r.stay.id)+'"><span class="hmain">'+(r.stay.from===day?'<span class="ptag in">Aankomst</span>':'')+'<b>'+esc(r.stay.name||'Gast zonder naam')+'</b><span class="hsub">'+esc(bookingSub(r.stay,day))+'</span>'+(r.stay.note?'<span class="hsub">'+esc(r.stay.note)+'</span>':'')+'</span>'+stayPill(r.stay,day)+'</button>';
-    else if(r.stay)h+='<button type="button" class="pline" data-bid="'+esc(r.stay.id)+'"><span class="hmain"><b class="muted">Geblokkeerd</b><span class="hsub">'+esc(r.stay.name||'Zonder reden')+' · t/m '+esc(dayLabel(addDays(r.stay.to,-1)))+'</span></span><span class="pill">Niet verhuren</span></button>';
-    else h+='<div class="pline free"><span class="hmain"><b class="'+(r.st==='vast'?'muted':'pvrij')+'">'+(r.st==='vast'?'Vast voor '+esc(s.hold):'Vrij')+'</b>'+(s.note?'<span class="hsub">'+esc(s.note)+'</span>':'')+'</span><button type="button" class="btn'+(r.st==='vast'?'':' primary')+'" data-newb="'+esc(s.id)+'">'+(r.st==='vast'?'Toch verhuren':'+ Verhuren')+'</button></div>';
+    if(r.leave)h+=line(r.leave,day,'<span class="ptag">Vertrekt</span>',leaveAct(r.leave));
+    if(r.stay&&r.stay.kind==='gast')h+=line(r.stay,day,r.stay.from===day?'<span class="ptag in">Aankomst</span>':'',stayAct(r.stay));
+    else if(r.stay)h+='<div class="pline"><button type="button" class="pedit" data-bid="'+esc(r.stay.id)+'"><span class="hmain"><b class="muted">Geblokkeerd</b><span class="hsub">'+esc(r.stay.name||'Zonder reden')+' · t/m '+esc(dayLabel(addDays(r.stay.to,-1)))+'</span></span></button><span class="pact"><span class="pill">Niet verhuren</span></span></div>';
+    else h+='<div class="pline free"><span class="hmain"><b class="'+(r.st==='vast'?'muted':'pvrij')+'">'+(r.st==='vast'?'Vast voor '+esc(s.hold):'Vrij')+'</b>'+(s.note?'<span class="hsub">'+esc(s.note)+'</span>':'')+'</span><button type="button" class="btn'+(r.st==='vast'?'':' primary')+'" data-newb="'+esc(s.id)+'">'+(r.st==='vast'?'Toch reserveren':'+ Reserveren')+'</button></div>';
     h+='</div></li>';
   });
   return h+'</ul></div>';
@@ -235,32 +245,42 @@ function searchHtml(bs){
   if(!hits.length)return h+'<div class="card"><p class="muted">Niets gevonden voor "'+esc(S.q.trim())+'".</p></div></div>';
   h+='<ul class="rows">'+hits.slice(0,25).map(function(b){
     var now=occupies(b,td);
-    return '<li><button type="button" class="hrow" data-bid="'+esc(b.id)+'"><span class="htime num">'+esc(spotName(b.spot))+'</span><span class="hmain"><b>'+esc(b.name||'Gast zonder naam')+'</b><span class="hsub">'+esc(dayLabel(b.from))+' – '+esc(dayLabel(b.to))+(b.room?' · kamer '+esc(b.room):'')+(b.plate?' · '+esc(plateFmt(b.plate)):'')+'</span></span>'+(now?'<span class="pill good">Staat er nu</span>':b.from>td?'<span class="pill">Komt nog</span>':'<span class="pill">Geweest</span>')+'</button></li>';
+    return '<li><button type="button" class="hrow" data-bid="'+esc(b.id)+'"><span class="htime num">'+esc(spotName(b.spot))+'</span><span class="hmain"><b>'+esc(b.name||'Gast zonder naam')+'</b><span class="hsub">'+esc(dayLabel(b.from))+' – '+esc(dayLabel(b.to))+(b.room?' · kamer '+esc(b.room):'')+(b.plate?' · '+esc(plateFmt(b.plate)):'')+'</span></span>'+(now?(b.keyOut?'<span class="pill good">Staat er nu</span>':'<span class="pill warn">Nog te activeren</span>'):b.from>td?'<span class="pill">Gereserveerd</span>':'<span class="pill">Geweest</span>')+'</button></li>';
   }).join('')+'</ul>';
   return h+'</div>';
 }
 
 /* --- verhuring of blokkade --- */
 function chk(id,label,on,sub){return '<label class="dchk pchk"><input type="checkbox" id="'+id+'"'+(on?' checked':'')+'><span>'+label+(sub?'<small>'+esc(sub)+'</small>':'')+'</span></label>'}
+function mewsBtn(id,m){
+  return '<div class="field"><span class="flabel">Kosten in Mews</span><button type="button" class="btn mews" id="'+id+'" aria-pressed="'+(m?'true':'false')+'"><span class="mews-box" aria-hidden="true">✓</span><span><b>Kosten opgeboekt in Mews</b><small>'+(m?esc(stampText(m)):'Tik om te bevestigen dat de parkeerkosten op de kamer of reservering staan.')+'</small></span></button></div>';
+}
+function summary(b){return '<p class="note"><b>Plek '+esc(spotName(b.spot))+' · '+esc(b.name||'Gast zonder naam')+'</b><br>'+esc(dayLabel(b.from))+' tot '+esc(dayLabel(b.to))+' · '+nights(b.from,b.to)+' '+(nights(b.from,b.to)===1?'nacht':'nachten')+'</p>'}
+/* stap 1: reserveren (of een bestaande reservering, verhuring of blokkade aanpassen) */
 function openBooking(bid,sid,kind,day0){
   var b=bid?bookings().filter(function(x){return x.id===bid})[0]:null;if(bid&&!b)return;
   kind=b?b.kind:(kind||'gast');
-  var from=b?b.from:(day0||S.day),to=b?b.to:addDays(day0||S.day,1),ss=spots(true).filter(function(s){return !s.gone||(b&&b.spot===s.id)});
-  var h='<h2>'+(b?(kind==='blok'?'Blokkade aanpassen':'Verhuring aanpassen'):(kind==='blok'?'Plek blokkeren':'Plek verhuren'))+'</h2>';
-  if(!b)h+='<div class="seg soft" role="group" aria-label="Soort" id="b-kind"><button type="button" data-kind="gast" aria-pressed="'+(kind==='gast')+'">Verhuren aan gast</button><button type="button" data-kind="blok" aria-pressed="'+(kind==='blok')+'">Blokkeren</button></div>';
+  var act=!!(b&&b.keyOut),from=b?b.from:(day0||S.day),to=b?b.to:addDays(day0||S.day,1),ss=spots(true).filter(function(s){return !s.gone||(b&&b.spot===s.id)});
+  var h='<h2>'+(b?(kind==='blok'?'Blokkade aanpassen':act?'Verhuring aanpassen':'Reservering aanpassen'):(kind==='blok'?'Plek blokkeren':'Plek reserveren'))+'</h2>';
+  if(!b)h+='<div class="seg soft" role="group" aria-label="Soort" id="b-kind"><button type="button" data-kind="gast" aria-pressed="'+(kind==='gast')+'">Reserveren voor gast</button><button type="button" data-kind="blok" aria-pressed="'+(kind==='blok')+'">Blokkeren</button></div>';
+  if(!b&&kind==='gast')h+='<p class="muted" style="margin-top:-6px;font-size:13.5px">Kenteken, borg en sleutel vul je pas in bij aankomst, met de knop Activeren.</p>';
   h+='<div class="grid2"><div class="field"><label for="b-spot">Plek</label><select class="input" id="b-spot">'+ss.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===(b?b.spot:sid)?' selected':'')+'>'+esc(s.nr+(s.garage?' '+s.garage:''))+'</option>'}).join('')+'</select></div>'
     +'<div class="field"><label for="b-name">'+(kind==='blok'?'Reden':'Naam gast')+'</label><input class="input" id="b-name" autocomplete="off" maxlength="80" placeholder="'+(kind==='blok'?'bv. niet verkopen, onderhoud':'')+'" value="'+esc(b?b.name:'')+'"></div></div>';
   h+='<div class="grid2"><div class="field"><label for="b-from">'+(kind==='blok'?'Vanaf':'Aankomst')+'</label><input class="input" id="b-from" type="date" value="'+esc(from)+'"></div>'
     +'<div class="field"><label for="b-to">'+(kind==='blok'?'Tot en met':'Vertrek')+'</label><input class="input" id="b-to" type="date" value="'+esc(kind==='blok'?addDays(to,-1):to)+'">'+(kind==='blok'?'':'<small id="b-nights"></small>')+'</div></div>';
   if(kind==='gast'){
-    h+='<div class="grid2"><div class="field"><label for="b-room">Kamernummer</label><input class="input" id="b-room" autocomplete="off" maxlength="20" inputmode="numeric" value="'+esc(b?b.room:'')+'"></div>'
-      +'<div class="field"><label for="b-plate">Kenteken</label><input class="input" id="b-plate" autocomplete="off" autocapitalize="characters" maxlength="20" placeholder="Onbekend? Vul dat in." value="'+esc(b?plateFmt(b.plate):'')+'"></div></div>';
-    h+='<div class="grid2"><div class="field"><label for="b-dep">Borg</label><select class="input" id="b-dep"><option value="">Nog niet ingevuld</option>'+Object.keys(DEP).map(function(k){return '<option value="'+k+'"'+(b&&b.dep===k?' selected':'')+'>'+DEP[k]+'</option>'}).join('')+'</select></div>'
+    h+='<div class="grid2"><div class="field"><label for="b-room">Kamernummer'+(act?'':' (als het al bekend is)')+'</label><input class="input" id="b-room" autocomplete="off" maxlength="20" inputmode="numeric" value="'+esc(b?b.room:'')+'"></div>'
       +'<div class="field"><label>Tijden (optioneel)</label><div class="rowflex" style="flex-wrap:nowrap"><input class="input" id="b-t1" type="time" aria-label="Aankomst vanaf" value="'+esc(b?b.t1:'')+'"><input class="input" id="b-t2" type="time" aria-label="Vertrek uiterlijk" value="'+esc(b?b.t2:'')+'"></div><small>Aankomst vanaf · vertrek uiterlijk</small></div></div>';
-    h+='<div class="stack pchecks">'+chk('b-out','Sleutel uitgegeven',b&&b.keyOut,b&&stampText(b.keyOut))+chk('b-back','Sleutel terug',b&&b.keyBack,b&&stampText(b.keyBack))+chk('b-depback','Borg teruggegeven of geannuleerd',b&&b.depBack,b&&stampText(b.depBack))+(b?chk('b-noshow','Niet gekomen (plek komt vrij)',b.noshow,stampText(b.noshow)):'')+'</div>';
+    h+=mewsBtn('b-mews',b&&b.mews);
+    if(act){
+      h+='<div class="grid2"><div class="field"><label for="b-plate">Kenteken</label><input class="input" id="b-plate" autocomplete="off" autocapitalize="characters" maxlength="20" value="'+esc(plateFmt(b.plate))+'"></div>'
+        +'<div class="field"><label for="b-dep">Borg</label><select class="input" id="b-dep"><option value="">Nog niet ingevuld</option>'+Object.keys(DEP).map(function(k){return '<option value="'+k+'"'+(b.dep===k?' selected':'')+'>'+DEP[k]+'</option>'}).join('')+'</select></div></div>';
+      h+='<div class="stack pchecks">'+chk('b-out','Geactiveerd: sleutel uitgegeven',true,stampText(b.keyOut))+chk('b-back','Sleutel terug',b.keyBack,stampText(b.keyBack))+chk('b-depback','Borg teruggegeven of geannuleerd',b.depBack,stampText(b.depBack))+'</div>';
+    }else if(b)h+='<div class="stack pchecks">'+chk('b-noshow','Niet gekomen (plek komt vrij)',b.noshow,stampText(b.noshow))+'</div>'
+      +(b.from<=today()&&!b.noshow?'<div class="note spread"><span>Is de gast er? Dan activeer je de plek met kenteken, borg en sleutel.</span><button type="button" class="btn" data-act="'+esc(b.id)+'">Activeren</button></div>':'');
   }
   h+='<div class="field"><label for="b-note">Opmerking</label><input class="input" id="b-note" autocomplete="off" maxlength="200" placeholder="'+(kind==='gast'?'bv. VIP, als laatste verkopen':'')+'" value="'+esc(b?b.note:'')+'"></div>';
-  h+='<p class="gate-msg" id="b-msg" role="alert" style="min-height:0"></p><div class="spread" id="b-btns">'+(b?'<button class="btn danger" id="b-del">Verwijderen</button>':'<span></span>')+'<span class="rowflex"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="b-save">Opslaan</button></span></div>';
+  h+='<p class="gate-msg" id="b-msg" role="alert" style="min-height:0"></p><div class="spread" id="b-btns">'+(b?'<button class="btn danger" id="b-del">Verwijderen</button>':'<span></span>')+'<span class="rowflex"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="b-save">'+(b?'Opslaan':(kind==='blok'?'Blokkeren':'Reserveren'))+'</button></span></div>';
   openModal(h);
   var sheet=$('#modal .sheet');sheet.setAttribute('data-bid',bid||'');sheet.setAttribute('data-kind',kind);sheet.setAttribute('data-sid',sid||'');
   syncNights();
@@ -283,25 +303,82 @@ function doSaveBooking(){
   if(nights(from,to)>365){msg.textContent='Dat is langer dan een jaar. Controleer de datums.';return}
   var f={kind:kind,spot:spot,name:name,from:from,to:to,note:$('#b-note').value.trim()};
   if(kind==='gast'){
-    f.room=$('#b-room').value.trim();f.plate=plateFmt($('#b-plate').value);f.dep=$('#b-dep').value||null;f.t1=$('#b-t1').value||'';f.t2=$('#b-t2').value||'';
+    f.room=$('#b-room').value.trim();f.t1=$('#b-t1').value||'';f.t2=$('#b-t2').value||'';
+    if($('#b-plate')){f.plate=plateFmt($('#b-plate').value);f.dep=$('#b-dep').value||null}
     [['b-out','keyOut'],['b-back','keyBack'],['b-depback','depBack'],['b-noshow','noshow']].forEach(function(x){
       var c=$('#'+x[0]);if(!c)return;
       f[x[1]]=c.checked?((old&&old[x[1]])||stamp()):null;
     });
-    if(f.keyBack&&!f.keyOut)f.keyOut=f.keyBack;
+    f.mews=$('#b-mews').getAttribute('aria-pressed')==='true'?((old&&old.mews)||stamp()):null;
+    if($('#b-out')&&!f.keyOut&&(f.keyBack||f.depBack)){msg.textContent='Een plek die niet geactiveerd is, kan geen sleutel of borg terug hebben. Haal die vinkjes weg of laat de activering staan.';return}
   }
   if(!(kind==='gast'&&f.noshow)){
     var clash=all.filter(function(o){return o.id!==bid&&o.spot===spot&&!o.noshow&&o.from<to&&from<o.to})[0];
-    if(clash){msg.textContent='Plek '+spotName(spot)+' is in die periode al '+(clash.kind==='blok'?'geblokkeerd ('+clash.name+')':'verhuurd aan '+(clash.name||'een gast'))+', van '+dayLabel(clash.from)+' tot '+dayLabel(clash.to)+'. Kies een andere plek of andere datums.';return}
+    if(clash){msg.textContent='Plek '+spotName(spot)+' is in die periode al '+(clash.kind==='blok'?'geblokkeerd ('+clash.name+')':'gereserveerd voor '+(clash.name||'een gast'))+', van '+dayLabel(clash.from)+' tot '+dayLabel(clash.to)+'. Kies een andere plek of andere datums.';return}
   }
-  var id=bid||uid('b'),doc=KEY+'_'+from.slice(0,7),b=$('#b-save');b.disabled=true;b.textContent='Opslaan…';
+  if(kind==='gast'&&!f.mews&&!f.noshow&&!sheet.hasAttribute('data-warned')){
+    sheet.setAttribute('data-warned','');
+    msg.textContent='De kosten zijn nog niet bevestigd in Mews. Bevestig ze met de knop hierboven, of tik nogmaals op '+$('#b-save').textContent+' om het later te doen; de reservering blijft dan in de controle staan.';
+    $('#b-mews').focus();return;
+  }
+  var id=bid||uid('b'),doc=KEY+'_'+from.slice(0,7),b=$('#b-save'),lab=b.textContent;b.disabled=true;b.textContent='Opslaan…';
   if(!old){f.by=me();f.at=new Date().toISOString()}else f.editBy=me();
-  var done=function(){closeModal();toast(kind==='blok'?'Blokkade opgeslagen.':'Verhuring opgeslagen.')},fail=function(){b.disabled=false;b.textContent='Opslaan';msg.textContent='Opslaan lukt niet. Controleer je internetverbinding.'};
+  var done=function(){closeModal();toast(kind==='blok'?'Blokkade opgeslagen.':old?'Opgeslagen.':'Plek gereserveerd.')},fail=function(){b.disabled=false;b.textContent=lab;msg.textContent='Opslaan lukt niet. Controleer je internetverbinding.'};
   /* verschuift de aankomst naar een andere maand, dan verhuist de verhuring mee naar het document van die maand */
   if(old&&old.doc!==doc){
     var full={};Object.keys(old).forEach(function(k){if(k!=='id'&&k!=='doc')full[k]=old[k]});Object.keys(f).forEach(function(k){full[k]=f[k]});
     saveBooking(doc,id,full).then(function(){return saveBooking(old.doc,id,{gone:true})}).then(done,fail);
   }else saveBooking(doc,id,f).then(done,fail);
+}
+/* stap 2, bij aankomst: de gereserveerde plek activeren */
+function openActivate(bid){
+  var b=bookings().filter(function(x){return x.id===bid})[0];if(!b)return;
+  if(!needName())return;
+  var h='<h2>Plek activeren</h2>'+summary(b)
+    +'<div class="grid2"><div class="field"><label for="a-room">Kamernummer</label><input class="input" id="a-room" autocomplete="off" maxlength="20" inputmode="numeric" value="'+esc(b.room)+'"></div>'
+    +'<div class="field"><label for="a-plate">Kenteken</label><input class="input" id="a-plate" autocomplete="off" autocapitalize="characters" maxlength="20" placeholder="bv. AB-123-C" value="'+esc(plateFmt(b.plate))+'"><label class="dchk" style="min-height:0;font-size:13px;font-weight:500"><input type="checkbox" id="a-noplate"><span>Kenteken onbekend</span></label></div></div>'
+    +'<div class="field"><span class="flabel" id="a-dep-l">Borg</span><div class="seg soft" role="group" aria-labelledby="a-dep-l" id="a-dep">'+Object.keys(DEP).map(function(k){return '<button type="button" data-dep="'+k+'" aria-pressed="'+(b.dep===k)+'">'+DEP[k]+'</button>'}).join('')+'</div></div>'
+    +(b.mews?'':mewsBtn('a-mews',null))
+    +'<p class="note">Met Activeren leg je vast dat de sleutel nu is uitgegeven.</p>'
+    +'<p class="gate-msg" id="a-msg" role="alert" style="min-height:0"></p><div class="spread"><button class="btn ghost" data-bid="'+esc(b.id)+'">Reservering aanpassen</button><span class="rowflex"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="a-save">Activeren</button></span></div>';
+  openModal(h);$('#modal .sheet').setAttribute('data-bid',bid);
+  setTimeout(function(){var f=$(b.room?'#a-plate':'#a-room');if(f)f.focus()},50);
+}
+function doActivate(){
+  var bid=$('#modal .sheet').getAttribute('data-bid'),b=bookings().filter(function(x){return x.id===bid})[0],msg=$('#a-msg');if(!b)return;
+  var room=$('#a-room').value.trim(),plate=$('#a-noplate').checked?'ONBEKEND':plateFmt($('#a-plate').value),depBtn=$('#a-dep [aria-pressed="true"]');
+  if(!room){msg.textContent='Vul het kamernummer in.';$('#a-room').focus();return}
+  if(!plate){msg.textContent='Vul het kenteken in, of vink aan dat het onbekend is.';$('#a-plate').focus();return}
+  if(!depBtn){msg.textContent='Kies hoe de borg is betaald, of kies Geen borg.';return}
+  var btn=$('#a-save');btn.disabled=true;btn.textContent='Activeren…';
+  var fa={room:room,plate:plate,dep:depBtn.getAttribute('data-dep'),keyOut:stamp(),noshow:null},mb=$('#a-mews');
+  if(mb&&mb.getAttribute('aria-pressed')==='true')fa.mews=stamp();
+  saveBooking(b.doc,b.id,fa).then(function(){closeModal();toast('Plek '+spotName(b.spot)+' is geactiveerd.')},function(){btn.disabled=false;btn.textContent='Activeren';msg.textContent='Opslaan lukt niet. Controleer je internetverbinding.'});
+}
+/* stap 3, bij vertrek: afmelden */
+function openCheckout(bid){
+  var b=bookings().filter(function(x){return x.id===bid})[0];if(!b)return;
+  if(!needName())return;
+  var dep=b.dep==='cash'||b.dep==='cc';
+  var h='<h2>Plek afmelden</h2>'+summary(b)+'<p class="muted" style="margin-top:-6px">Kamer '+esc(b.room||'?')+' · '+esc(plateFmt(b.plate)||'geen kenteken')+' · '+esc(b.dep==='geen'?'geen borg':b.dep?'borg '+DEP[b.dep].toLowerCase():'borg niet ingevuld')+'</p>'
+    +'<div class="stack pchecks">'+chk('o-back','Sleutel terug',true,stampText(b.keyBack))+(dep?chk('o-depback','Borg ('+DEP[b.dep].toLowerCase()+') teruggegeven of geannuleerd',true,stampText(b.depBack)):'')+'</div>'
+    +'<p class="muted" style="font-size:13.5px">Haal een vinkje weg als dat nog niet is gebeurd; de plek blijft dan in de controle staan.</p>'
+    +'<p class="gate-msg" id="o-msg" role="alert" style="min-height:0"></p><div class="spread"><button class="btn ghost" data-bid="'+esc(b.id)+'">Gegevens aanpassen</button><span class="rowflex"><button class="btn ghost" data-close>Annuleren</button><button class="btn primary" id="o-save">Afmelden</button></span></div>';
+  openModal(h);$('#modal .sheet').setAttribute('data-bid',bid);
+}
+function doCheckout(){
+  var bid=$('#modal .sheet').getAttribute('data-bid'),b=bookings().filter(function(x){return x.id===bid})[0];if(!b)return;
+  var f={keyBack:$('#o-back').checked?(b.keyBack||stamp()):null},c=$('#o-depback');
+  if(c)f.depBack=c.checked?(b.depBack||stamp()):null;
+  var btn=$('#o-save');btn.disabled=true;btn.textContent='Afmelden…';
+  saveBooking(b.doc,b.id,f).then(function(){closeModal();toast(f.keyBack&&(!c||f.depBack)?'Plek '+spotName(b.spot)+' is afgemeld.':'Opgeslagen. Er staat nog iets open.')},function(){btn.disabled=false;btn.textContent='Afmelden';$('#o-msg').textContent='Opslaan lukt niet. Controleer je internetverbinding.'});
+}
+/* vanuit de controle: open meteen de stap die nodig is */
+function openFor(bid){
+  var b=bookings().filter(function(x){return x.id===bid})[0];if(!b)return;
+  if(b.kind==='gast'&&!b.noshow&&!b.keyOut&&b.from<=today()&&today()<b.to)openActivate(bid);
+  else if(b.kind==='gast'&&needsCheckout(b))openCheckout(bid);
+  else openBooking(bid);
 }
 function askDeleteBooking(){
   $('#b-btns').outerHTML='<div class="note bad" id="b-btns"><p style="margin-bottom:10px"><b>Verwijderen?</b> De plek komt vrij voor deze periode. Is de gast niet komen opdagen, gebruik dan liever "Niet gekomen".</p><div class="rowflex"><button class="btn" data-close>Nee, laat staan</button><button class="btn danger" id="b-del2">Ja, verwijderen</button></div></div>';
@@ -313,27 +390,28 @@ function doDeleteBooking(){
 
 /* --- controle --- */
 function renderCheck(is){
-  var td=today(),st=dayState(td);
-  var h='<section class="stack"><div><h2>Controle</h2><span class="muted">'+esc(dayLabel(td))+' · '+st.sold+' van '+st.total+' plekken verhuurd</span></div>';
-  if(!is.length)h+='<div class="note good">Alles is ingevuld en afgehandeld. Er staat niemand zonder registratie en alle sleutels en borgen kloppen.</div>';
+  var td=today(),st=dayState(td),now0=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&r.stay.keyOut}).length;
+  var h='<section class="stack"><div><h2>Controle</h2><span class="muted">'+esc(dayLabel(td))+' · '+st.sold+' van '+st.total+' plekken verhuurd, '+now0+' geactiveerd</span></div>';
+  if(!is.length)h+='<div class="note good">Alles is geactiveerd en afgemeld. Er staat niemand zonder registratie en alle sleutels en borgen kloppen.</div>';
   else{
     h+='<ul class="rows">'+is.map(function(i){
-      return '<li><button type="button" class="hrow'+(i.sev==='bad'?' bad':'')+'" '+(i.b?'data-bid="'+esc(i.b.id)+'"':'data-did="'+esc(i.d.id)+'"')+'><span class="hmain"><b>'+esc(i.title)+'</b><span class="'+(i.sev==='bad'?'hbad':'hsub')+'">'+esc(i.text)+'</span></span><span class="pill '+i.sev+'">'+(i.sev==='bad'?'Actie nodig':'Vandaag')+'</span></button></li>';
-    }).join('')+'</ul><p class="muted" style="font-size:13px">Tik op een regel om hem aan te vullen of af te handelen. Rood is te laat, geel hoort bij vandaag.</p>';
+      return '<li><button type="button" class="hrow'+(i.sev==='bad'?' bad':'')+'" '+(i.b?'data-go="'+esc(i.b.id)+'"':'data-did="'+esc(i.d.id)+'"')+'><span class="hmain"><b>'+esc(i.title)+'</b><span class="'+(i.sev==='bad'?'hbad':'hsub')+'">'+esc(i.text)+'</span></span><span class="pill '+i.sev+'">'+(i.sev==='bad'?'Actie nodig':(i.tag||'Vandaag'))+'</span></button></li>';
+    }).join('')+'</ul><p class="muted" style="font-size:13px">Tik op een regel om te activeren, af te melden of aan te vullen. Rood is te laat, geel hoort bij vandaag of bij een reservering die nog in Mews moet.</p>';
   }
   h+='<div class="stack"><h3>Wie staat er nu</h3>';
-  var now=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'});
+  var now=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&r.stay.keyOut}),wait=st.rows.filter(function(r){return r.stay&&r.stay.kind==='gast'&&!r.stay.keyOut}).length;
   h+=now.length?'<div class="gridwrap"><table class="plist"><thead><tr><th>Plek</th><th>Gast</th><th>Kamer</th><th>Kenteken</th><th>Vertrek</th><th>Borg</th></tr></thead><tbody>'+now.map(function(r){var b=r.stay;
     return '<tr><td class="num"><b>'+esc(r.s.nr)+'</b></td><td>'+esc(b.name)+'</td><td class="num">'+(b.room?esc(b.room):'<span class="miss">?</span>')+'</td><td class="num">'+(b.plate?esc(plateFmt(b.plate)):'<span class="miss">?</span>')+'</td><td>'+esc(dayLabel(b.to))+'</td><td>'+(b.dep?esc(DEP[b.dep]):'<span class="miss">?</span>')+'</td></tr>'}).join('')+'</tbody></table></div>'
-    :'<div class="card"><p class="muted">Er staat nu niemand op een parkeerplek.</p></div>';
+    :'<div class="card"><p class="muted">Er is nu geen plek geactiveerd.</p></div>';
+  if(wait)h+='<p class="muted" style="font-size:13px">'+wait+' gereserveerde '+(wait===1?'plek is':'plekken zijn')+' nog niet geactiveerd en '+(wait===1?'staat':'staan')+' daarom niet in deze lijst.</p>';
   h+='</div><div class="rowflex"><button class="btn" id="csv">Download '+esc(monthLabel(td.slice(0,7)))+' (CSV)</button><span class="muted" style="font-size:13px">Alle verhuringen die deze maand lopen of liepen.</span></div></section>';
   $('#view').innerHTML=h;
 }
 function buildCsv(mo){
-  var a=mo+'-01',z=addDays(mo+'-'+p2(daysIn(mo)),1),L=[['Plek','Soort','Naam of reden','Kamer','Kenteken','Aankomst','Vertrek','Nachten','Borg','Sleutel uitgegeven','Sleutel terug','Borg terug','Niet gekomen','Opmerking','Ingevoerd door']];
+  var a=mo+'-01',z=addDays(mo+'-'+p2(daysIn(mo)),1),L=[['Plek','Soort','Naam of reden','Kamer','Kenteken','Aankomst','Vertrek','Nachten','Borg','Kosten in Mews','Geactiveerd (sleutel uit)','Sleutel terug','Borg terug','Niet gekomen','Opmerking','Ingevoerd door']];
   function q(v){v=String(v==null?'':v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
   bookings().filter(function(b){return b.from<z&&a<b.to}).forEach(function(b){
-    L.push([spotName(b.spot),b.kind==='blok'?'Blokkade':'Verhuring',b.name,b.room,plateFmt(b.plate),b.from,b.to,nights(b.from,b.to),b.dep?DEP[b.dep]:'',stampText(b.keyOut),stampText(b.keyBack),stampText(b.depBack),b.noshow?'ja':'',b.note,b.by]);
+    L.push([spotName(b.spot),b.kind==='blok'?'Blokkade':(b.keyOut?'Verhuring':'Reservering'),b.name,b.room,plateFmt(b.plate),b.from,b.to,nights(b.from,b.to),b.dep?DEP[b.dep]:'',b.kind==='gast'?(stampText(b.mews)||'nee'):'',stampText(b.keyOut),stampText(b.keyBack),stampText(b.depBack),b.noshow?'ja':'',b.note,b.by]);
   });
   return '﻿'+L.map(function(r){return r.map(q).join(';')}).join('\r\n');
 }
@@ -446,6 +524,17 @@ document.addEventListener('click',function(ev){
   if(el.id==='totoday'){setDay(today());return}
   if(el.hasAttribute('data-day')){setDay(el.getAttribute('data-day'),true);return}
   if(el.hasAttribute('data-newb')){if(needName())openBooking(null,el.getAttribute('data-newb'),'gast');return}
+  if(el.hasAttribute('data-act')){openActivate(el.getAttribute('data-act'));return}
+  if(el.hasAttribute('data-out')){openCheckout(el.getAttribute('data-out'));return}
+  if(el.hasAttribute('data-go')){openFor(el.getAttribute('data-go'));return}
+  if(el.id==='a-save'){doActivate();return}
+  if(el.id==='o-save'){doCheckout();return}
+  if(el.classList.contains('mews')){
+    var on=el.getAttribute('aria-pressed')!=='true';el.setAttribute('aria-pressed',on?'true':'false');
+    $('small',el).textContent=on?'Bevestigd door '+me()+'.':'Tik om te bevestigen dat de parkeerkosten op de kamer of reservering staan.';
+    var mm=$('#b-msg');if(mm&&on)mm.textContent='';return;
+  }
+  if(el.hasAttribute('data-dep')){$all('button',el.parentNode).forEach(function(b){b.setAttribute('aria-pressed',b===el?'true':'false')});return}
   if(el.hasAttribute('data-bid')){
     var bk=bookings().filter(function(x){return x.id===el.getAttribute('data-bid')})[0];
     if(bk&&S.view==='kalender'&&S.q.trim()){S.q='';S.day=bk.from<=today()&&today()<bk.to?today():bk.from;S.month=S.day.slice(0,7);render()}
@@ -476,6 +565,7 @@ document.addEventListener('click',function(ev){
 document.addEventListener('change',function(ev){
   var el=ev.target;
   if(el.id==='naam'){var v=el.value.trim();el.value=v;ls('naam',v);if(v)$('#toast').hidden=true;return}
+  if(el.id==='a-noplate'){var pl=$('#a-plate');pl.disabled=el.checked;if(el.checked)pl.value='';return}
   if(el.id==='b-from'||el.id==='b-to'){
     if(el.id==='b-from'&&$('#b-nights')&&isDate(el.value)&&$('#b-to').value<=el.value)$('#b-to').value=addDays(el.value,1);
     syncNights();
@@ -490,7 +580,7 @@ document.addEventListener('keydown',function(ev){
   if(ev.key!=='Enter')return;
   var el=ev.target;
   if(el.id==='naam'||el.id==='zoek'){ev.preventDefault();el.blur();return}
-  if(modalOpen()&&el.tagName==='INPUT'&&el.type!=='checkbox'){ev.preventDefault();var b=$('#b-save')||$('#d-save')||$('#s-save');if(b)b.click()}
+  if(modalOpen()&&el.tagName==='INPUT'&&el.type!=='checkbox'){ev.preventDefault();var b=$('#b-save')||$('#a-save')||$('#d-save')||$('#s-save');if(b)b.click()}
 });
 $('#modal').addEventListener('click',function(ev){if(ev.target===this)closeModal()});
 window.addEventListener('hashchange',function(){var v=location.hash.slice(1);if(v&&v!==S.view)setView(v)});
